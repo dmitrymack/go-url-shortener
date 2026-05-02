@@ -30,7 +30,7 @@ func SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := "abc123"
-	shortURL := "http://" + r.Host + "/" + id + "\n"
+	shortURL := "http://" + r.Host + "/" + id
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
