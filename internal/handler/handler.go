@@ -5,9 +5,7 @@ import (
 	"net/http"
 )
 
-var storage = map[string]string{
-	"abc123": "https://practicum.yandex.ru/",
-}
+var storage = map[string]string{}
 
 func SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -31,6 +29,7 @@ func SetShortUrl(w http.ResponseWriter, r *http.Request) {
 
 	id := "abc123"
 	shortURL := "http://" + r.Host + "/" + id
+	storage[id] = originURL
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
