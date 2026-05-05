@@ -38,11 +38,12 @@ func SetShortUrl(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUrlById(w http.ResponseWriter, r *http.Request) {
-	if storage[chi.URLParam(r, "id")] == "" {
+	id := chi.URLParam(r, "id")
+	if storage[id] == "" {
 		http.Error(w, "URL not found", http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Location", storage[r.PathValue("id")])
+	w.Header().Set("Location", storage[id])
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }

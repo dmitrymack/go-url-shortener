@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -115,7 +117,13 @@ func TestGetUrlById(t *testing.T) {
 			}
 
 			r := httptest.NewRequest(http.MethodGet, "/"+tt.id, nil)
-			r.SetPathValue("id", tt.id)
+
+			routeCtx := chi.NewRouteContext()
+			routeCtx.URLParams.Add("id", tt.id)
+
+			r = r.WithContext(
+				context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx),
+			)
 
 			w := httptest.NewRecorder()
 
