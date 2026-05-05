@@ -9,7 +9,11 @@ import (
 
 var storage = map[string]string{}
 
-func SetShortUrl(w http.ResponseWriter, r *http.Request) {
+type Handler struct {
+	BaseURL string
+}
+
+func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Only POST requests are allowed", http.StatusBadRequest)
 		return
@@ -30,14 +34,14 @@ func SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id := "abc123"
-	shortURL := "http://" + r.Host + "/" + id
+	shortURL := h.BaseURL + "/" + id
 	storage[id] = originURL
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
 }
 
-func GetUrlById(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if storage[id] == "" {
 		http.Error(w, "URL not found", http.StatusBadRequest)

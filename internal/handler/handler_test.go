@@ -66,7 +66,11 @@ func TestSetShortUrl(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
-			SetShortUrl(w, r)
+			h := &Handler{
+				BaseURL: "http://localhost:8080",
+			}
+
+			h.SetShortUrl(w, r)
 
 			res := w.Result()
 			defer res.Body.Close()
@@ -127,7 +131,9 @@ func TestGetUrlById(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
-			GetUrlById(w, r)
+			h := &Handler{}
+
+			h.GetUrlById(w, r)
 
 			res := w.Result()
 			defer res.Body.Close()
