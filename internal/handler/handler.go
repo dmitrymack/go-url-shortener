@@ -3,6 +3,8 @@ package handler
 import (
 	"io"
 	"net/http"
+
+	"github.com/go-chi/chi/v5"
 )
 
 var storage = map[string]string{}
@@ -36,7 +38,7 @@ func SetShortUrl(w http.ResponseWriter, r *http.Request) {
 }
 
 func GetUrlById(w http.ResponseWriter, r *http.Request) {
-	if storage[r.PathValue("id")] == "" {
+	if storage[chi.URLParam(r, "id")] == "" {
 		http.Error(w, "URL not found", http.StatusBadRequest)
 		return
 	}
