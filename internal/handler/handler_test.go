@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
+	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 )
@@ -35,16 +37,6 @@ func TestSetShortUrl(t *testing.T) {
 			},
 		},
 		{
-			name:   "wrong method",
-			method: http.MethodGet,
-			body:   "https://test.com",
-			host:   "localhost:8080",
-			want: want{
-				statusCode: http.StatusBadRequest,
-				shortURL:   "",
-			},
-		},
-		{
 			name:   "empty body",
 			method: http.MethodPost,
 			body:   "",
@@ -58,17 +50,15 @@ func TestSetShortUrl(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage = map[string]string{}
+			store := storage.NewStorage()
+			service := shortenService.NewShortenService(store, "http://localhost:8080")
+			h := NewHandler(service)
 
 			body := strings.NewReader(tt.body)
 			r := httptest.NewRequest(tt.method, "/", body)
 			r.Host = tt.host
 
 			w := httptest.NewRecorder()
-
-			h := &Handler{
-				BaseURL: "http://localhost:8080",
-			}
 
 			h.SetShortUrl(w, r)
 
@@ -77,9 +67,18 @@ func TestSetShortUrl(t *testing.T) {
 
 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 
-			if tt.want.shortURL != "" {
-				assert.Equal(t, tt.want.shortURL, w.Body.String())
-				assert.Equal(t, tt.body, storage["abc123"])
+			if tt.want.statusCode == http.StatusCreated {
+				shortURL := w.Body.String()
+
+				assert.True(t, strings.HasPrefix(shortURL, "http://localhost:8080/"))
+
+				id := strings.TrimPrefix(shortURL, "http://localhost:8080/")
+				assert.NotEmpty(t, id)
+
+				value, ok := service.GetOriginalURL(id)
+
+				assert.True(t, ok)
+				assert.Equal(t, tt.body, value)
 			}
 		})
 	}
@@ -116,9 +115,12 @@ func TestGetUrlById(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			storage = map[string]string{
-				"abc123": "https://test.com",
+			store := storage.NewStorage()
+			if tt.want.originURL != "" {
+				store.Set(tt.id, tt.want.originURL)
 			}
+			service := shortenService.NewShortenService(store, "http://localhost:8080")
+			h := NewHandler(service)
 
 			r := httptest.NewRequest(http.MethodGet, "/"+tt.id, nil)
 
@@ -130,8 +132,6 @@ func TestGetUrlById(t *testing.T) {
 			)
 
 			w := httptest.NewRecorder()
-
-			h := &Handler{}
 
 			h.GetUrlById(w, r)
 

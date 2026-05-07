@@ -4,24 +4,24 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/go-chi/chi/v5"
 )
 
-var storage = map[string]string{}
-
 type Handler struct {
-	BaseURL string
+	service *service.ShortenService
+}
+
+func NewHandler(s *service.ShortenService) *Handler {
+	return &Handler{
+		service: s,
+	}
 }
 
 func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Only POST requests are allowed", http.StatusBadRequest)
-		return
-	}
-
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
-		http.Error(w, "Bad Request", http.StatusBadRequest)
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	defer r.Body.Close()
@@ -33,9 +33,7 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id := "abc123"
-	shortURL := h.BaseURL + "/" + id
-	storage[id] = originURL
+	shortURL := h.service.CreateShortURL(originURL)
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
@@ -43,11 +41,12 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if storage[id] == "" {
-		http.Error(w, "URL not found", http.StatusBadRequest)
+	value, ok := h.service.GetOriginalURL(id)
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 		return
 	}
 
-	w.Header().Set("Location", storage[id])
+	w.Header().Set("Location", value)
 	w.WriteHeader(http.StatusTemporaryRedirect)
 }
