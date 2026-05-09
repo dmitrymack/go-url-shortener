@@ -1,6 +1,10 @@
 package config
 
-import "flag"
+import (
+	"flag"
+	"log"
+	"net/url"
+)
 
 type Config struct {
 	ServerAddress string
@@ -14,6 +18,11 @@ func NewConfig() *Config {
 	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "Base URL")
 
 	flag.Parse()
+
+	_, err := url.ParseRequestURI(cfg.BaseURL)
+	if err != nil {
+		log.Fatal("invalid base URL:", err)
+	}
 
 	return cfg
 }

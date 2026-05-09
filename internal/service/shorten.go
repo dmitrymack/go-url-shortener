@@ -1,17 +1,24 @@
 package service
 
 import (
+	"errors"
 	"math/rand"
+	"net/url"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 )
 
+type URLStorage interface {
+	Get(key string) (string, bool)
+	Set(key string, value string) error
+}
+
 type ShortenService struct {
-	storage storage.URLStorage
+	storage URLStorage
 	baseURL string
 }
 
-func NewShortenService(s storage.URLStorage, baseURL string) *ShortenService {
+func NewShortenService(s URLStorage, baseURL string) *ShortenService {
 	return &ShortenService{
 		storage: s,
 		baseURL: baseURL,
@@ -26,10 +33,21 @@ func (s *ShortenService) CreateShortURL(originURL string) string {
 	for {
 		id := generateID()
 
-		if _, exists := s.storage.Get(id); !exists {
-			s.storage.Set(id, originURL)
-			return s.baseURL + "/" + id
+		err := s.storage.Set(id, originURL)
+		if errors.Is(err, storage.ErrDuplicateKey) {
+			continue
 		}
+
+		if err != nil {
+			panic(err)
+		}
+
+		res, err := url.JoinPath(s.baseURL, id)
+		if err != nil {
+			panic(err)
+		}
+
+		return res
 	}
 }
 

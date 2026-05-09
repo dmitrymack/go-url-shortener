@@ -1,9 +1,8 @@
 package storage
 
-type URLStorage interface {
-	Get(key string) (string, bool)
-	Set(key string, value string)
-}
+import "errors"
+
+var ErrDuplicateKey = errors.New("duplicate key")
 
 type Storage struct {
 	data map[string]string
@@ -18,6 +17,11 @@ func (s *Storage) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func (s *Storage) Set(key string, value string) {
+func (s *Storage) Set(key string, value string) error {
+	if _, exists := s.data[key]; exists {
+		return ErrDuplicateKey
+	}
+
 	s.data[key] = value
+	return nil
 }
