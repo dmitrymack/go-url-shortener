@@ -2,6 +2,7 @@ package handler
 
 import (
 	"io"
+	"log"
 	"net/http"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
@@ -33,7 +34,13 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL := h.service.CreateShortURL(originURL)
+	shortURL, err := h.service.CreateShortURL(originURL)
+	if err != nil {
+		log.Printf("CreateShortURL error: %v", err)
+
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))

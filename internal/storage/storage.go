@@ -18,7 +18,7 @@ func (s *Storage) Get(key string) (string, bool) {
 }
 
 func (s *Storage) Set(key string, value string) error {
-	if _, exists := s.data[key]; exists {
+	if _, ok := s.data[key]; ok {
 		return ErrDuplicateKey
 	}
 

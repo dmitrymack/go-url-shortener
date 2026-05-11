@@ -29,7 +29,7 @@ func (s *ShortenService) GetOriginalURL(id string) (string, bool) {
 	return s.storage.Get(id)
 }
 
-func (s *ShortenService) CreateShortURL(originURL string) string {
+func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
 	for {
 		id := generateID()
 
@@ -39,15 +39,15 @@ func (s *ShortenService) CreateShortURL(originURL string) string {
 		}
 
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 
 		res, err := url.JoinPath(s.baseURL, id)
 		if err != nil {
-			panic(err)
+			return "", err
 		}
 
-		return res
+		return res, nil
 	}
 }
 
