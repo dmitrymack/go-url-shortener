@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSetShortUrl(t *testing.T) {
@@ -140,6 +142,94 @@ func TestGetUrlById(t *testing.T) {
 
 			assert.Equal(t, tt.want.statusCode, res.StatusCode)
 			assert.Equal(t, tt.want.originURL, res.Header.Get("Location"))
+		})
+	}
+}
+
+func TestSetShortURLByJSON(t *testing.T) {
+	type want struct {
+		statusCode int
+	}
+
+	tests := []struct {
+		name string
+		body string
+		host string
+		want want
+	}{
+		{
+			name: "positive test",
+			body: `{"url":"https://test.com"}`,
+			host: "localhost:8080",
+			want: want{
+				statusCode: http.StatusCreated,
+			},
+		},
+		{
+			name: "empty url field",
+			body: `{"url":""}`,
+			host: "localhost:8080",
+			want: want{
+				statusCode: http.StatusBadRequest,
+			},
+		},
+		{
+			name: "invalid json",
+			body: `{"url":"https://test.com"`,
+			host: "localhost:8080",
+			want: want{
+				statusCode: http.StatusBadRequest,
+			},
+		},
+		{
+			name: "wrong field name",
+			body: `{"url111":"https://test.com"}`,
+			host: "localhost:8080",
+			want: want{
+				statusCode: http.StatusBadRequest,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := storage.NewStorage()
+			service := shortenService.NewShortenService(store, "http://localhost:8080")
+			h := NewHandler(service)
+
+			body := strings.NewReader(tt.body)
+			r := httptest.NewRequest(http.MethodPost, "/api/shorten", body)
+			r.Host = tt.host
+			r.Header.Set("Content-Type", "application/json")
+
+			w := httptest.NewRecorder()
+
+			h.SetShortUrlByJSON(w, r)
+
+			res := w.Result()
+			defer res.Body.Close()
+
+			assert.Equal(t, tt.want.statusCode, res.StatusCode)
+
+			if tt.want.statusCode == http.StatusCreated {
+				assert.Equal(t, "application/json", res.Header.Get("Content-Type"))
+
+				var respObj ResponseObject
+
+				err := json.NewDecoder(res.Body).Decode(&respObj)
+				require.NoError(t, err)
+
+				assert.True(t, strings.HasPrefix(respObj.Result, "http://localhost:8080/"))
+
+				id := strings.TrimPrefix(respObj.Result, "http://localhost:8080/")
+
+				assert.NotEmpty(t, id)
+
+				value, ok := service.GetOriginalURL(id)
+
+				assert.True(t, ok)
+				assert.Equal(t, "https://test.com", value)
+			}
 		})
 	}
 }
