@@ -26,7 +26,7 @@ func main() {
 	defer logger.Sync()
 
 	r := chi.NewRouter()
-	r.Use(middleware.LoggingHandler(logger))
+	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler)
 	r.Post("/", h.SetShortUrl)
 	r.Get("/{id}", h.GetUrlById)
 	r.Post("/api/shorten", h.SetShortUrlByJSON)
