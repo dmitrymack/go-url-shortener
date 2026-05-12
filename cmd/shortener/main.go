@@ -29,6 +29,7 @@ func main() {
 	r.Use(middleware.LoggingHandler(logger))
 	r.Post("/", h.SetShortUrl)
 	r.Get("/{id}", h.GetUrlById)
+	r.Post("/api/shorten", h.SetShortUrlByJSON)
 
 	err = http.ListenAndServe(cfg.ServerAddress, r)
 
