@@ -15,6 +15,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type MockWriter struct{}
+
+func (m *MockWriter) WriteEvent(event *shortenService.Event) error {
+	return nil
+}
+
 func TestSetShortUrl(t *testing.T) {
 	type want struct {
 		statusCode int
@@ -53,7 +59,8 @@ func TestSetShortUrl(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewStorage()
-			service := shortenService.NewShortenService(store, "http://localhost:8080")
+			mockWriter := &MockWriter{}
+			service := shortenService.NewShortenService(store, mockWriter, "http://localhost:8080")
 			h := NewHandler(service)
 
 			body := strings.NewReader(tt.body)
@@ -121,7 +128,8 @@ func TestGetUrlById(t *testing.T) {
 			if tt.want.originURL != "" {
 				store.Set(tt.id, tt.want.originURL)
 			}
-			service := shortenService.NewShortenService(store, "http://localhost:8080")
+			mockWriter := &MockWriter{}
+			service := shortenService.NewShortenService(store, mockWriter, "http://localhost:8080")
 			h := NewHandler(service)
 
 			r := httptest.NewRequest(http.MethodGet, "/"+tt.id, nil)
@@ -194,7 +202,8 @@ func TestSetShortURLByJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewStorage()
-			service := shortenService.NewShortenService(store, "http://localhost:8080")
+			mockWriter := &MockWriter{}
+			service := shortenService.NewShortenService(store, mockWriter, "http://localhost:8080")
 			h := NewHandler(service)
 
 			body := strings.NewReader(tt.body)

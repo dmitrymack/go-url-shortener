@@ -13,10 +13,14 @@ type URLStorage interface {
 	Set(key string, value string) error
 }
 
+type URLWriter interface {
+	WriteEvent(event *Event) error
+}
+
 type ShortenService struct {
-	storage  URLStorage
-	producer *Producer
-	baseURL  string
+	storage URLStorage
+	writer  URLWriter
+	baseURL string
 }
 
 type ShortenResult struct {
@@ -24,11 +28,11 @@ type ShortenResult struct {
 	ShortURL string
 }
 
-func NewShortenService(s URLStorage, p *Producer, baseURL string) *ShortenService {
+func NewShortenService(s URLStorage, w URLWriter, baseURL string) *ShortenService {
 	return &ShortenService{
-		storage:  s,
-		producer: p,
-		baseURL:  baseURL,
+		storage: s,
+		writer:  w,
+		baseURL: baseURL,
 	}
 }
 
@@ -54,7 +58,7 @@ func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
 			return "", err
 		}
 
-		err = s.producer.WriteEvent(&Event{
+		err = s.writer.WriteEvent(&Event{
 			ShortURL:    id,
 			OriginalURL: originURL,
 		})
