@@ -10,6 +10,7 @@ import (
 type Config struct {
 	ServerAddress string
 	BaseURL       string
+	StorageFile   string
 }
 
 func NewConfig() *Config {
@@ -17,6 +18,7 @@ func NewConfig() *Config {
 
 	flag.StringVar(&cfg.ServerAddress, "a", "localhost:8080", "Input host and port of server")
 	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "Base URL")
+	flag.StringVar(&cfg.StorageFile, "f", "storage.jsonl", "Storage file name")
 
 	flag.Parse()
 
@@ -26,6 +28,10 @@ func NewConfig() *Config {
 
 	if envBaseURL := os.Getenv("BASE_URL"); envBaseURL != "" {
 		cfg.BaseURL = envBaseURL
+	}
+
+	if envStorageFile := os.Getenv("FILE_STORAGE_PATH"); envStorageFile != "" {
+		cfg.StorageFile = envStorageFile
 	}
 
 	_, err := url.ParseRequestURI(cfg.BaseURL)

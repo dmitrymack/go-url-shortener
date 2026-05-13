@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"log"
 	"net/http"
 
@@ -16,7 +17,38 @@ import (
 func main() {
 	cfg := config.NewConfig()
 	store := storage.NewStorage()
-	service := shortenService.NewShortenService(store, cfg.BaseURL)
+
+	consumer, err := shortenService.NewConsumer(cfg.StorageFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer consumer.Close()
+
+	for {
+		event, err := consumer.ReadEvent()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		err = store.Set(event.ShortURL, event.OriginalURL)
+
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	producer, err := shortenService.NewProducer(cfg.StorageFile)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer producer.Close()
+
+	service := shortenService.NewShortenService(store, producer, cfg.BaseURL)
 	h := handler.NewHandler(service)
 
 	logger, err := zap.NewDevelopment()
