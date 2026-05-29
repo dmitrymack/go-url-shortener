@@ -108,8 +108,12 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) PingDatabase(w http.ResponseWriter, r *http.Request) {
-	err := h.database.Ping(r.Context())
-	if err != nil {
+	if h.database == nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.database.Ping(r.Context()); err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}

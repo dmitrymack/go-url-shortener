@@ -19,13 +19,15 @@ import (
 func main() {
 	cfg := config.NewConfig()
 	store := storage.NewStorage()
+	var db shortenService.Database
 
 	postgres, err := shortenService.NewPostgres(context.Background(), cfg.DSN)
 	if err != nil {
-		log.Fatal(err)
+		log.Printf(" Postgres unavailable: %v", err)
+	} else {
+		db = postgres
+		defer postgres.Close(context.Background())
 	}
-
-	defer postgres.Close(context.Background())
 
 	consumer, err := shortenService.NewConsumer(cfg.StorageFile)
 	if err != nil {
@@ -58,7 +60,7 @@ func main() {
 	defer producer.Close()
 
 	service := shortenService.NewShortenService(store, producer, cfg.BaseURL)
-	h := handler.NewHandler(service, postgres)
+	h := handler.NewHandler(service, db)
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {
