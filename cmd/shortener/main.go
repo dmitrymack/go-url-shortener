@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"io"
 	"log"
 	"net/http"
@@ -11,12 +12,22 @@ import (
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
 func main() {
 	cfg := config.NewConfig()
 	store := storage.NewStorage()
+	var db shortenService.Database
+
+	postgres, err := shortenService.NewPostgres(context.Background(), cfg.DSN)
+	if err != nil {
+		log.Printf(" Postgres unavailable: %v", err)
+	} else {
+		db = postgres
+		defer postgres.Close(context.Background())
+	}
 
 	consumer, err := shortenService.NewConsumer(cfg.StorageFile)
 	if err != nil {
@@ -49,7 +60,7 @@ func main() {
 	defer producer.Close()
 
 	service := shortenService.NewShortenService(store, producer, cfg.BaseURL)
-	h := handler.NewHandler(service)
+	h := handler.NewHandler(service, db)
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {
@@ -62,6 +73,7 @@ func main() {
 	r.Post("/", h.SetShortUrl)
 	r.Get("/{id}", h.GetUrlById)
 	r.Post("/api/shorten", h.SetShortUrlByJSON)
+	r.Get("/ping", h.PingDatabase)
 
 	err = http.ListenAndServe(cfg.ServerAddress, r)
 

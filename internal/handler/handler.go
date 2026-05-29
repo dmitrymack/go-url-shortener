@@ -11,7 +11,8 @@ import (
 )
 
 type Handler struct {
-	service *service.ShortenService
+	service  *service.ShortenService
+	database service.Database
 }
 
 type RequestObject struct {
@@ -22,9 +23,10 @@ type ResponseObject struct {
 	Result string `json:"result"`
 }
 
-func NewHandler(s *service.ShortenService) *Handler {
+func NewHandler(s *service.ShortenService, db service.Database) *Handler {
 	return &Handler{
-		service: s,
+		service:  s,
+		database: db,
 	}
 }
 
@@ -103,4 +105,18 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	w.Write(resp)
+}
+
+func (h *Handler) PingDatabase(w http.ResponseWriter, r *http.Request) {
+	if h.database == nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if err := h.database.Ping(r.Context()); err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
