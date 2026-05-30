@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 
@@ -11,6 +12,9 @@ import (
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
@@ -20,11 +24,23 @@ func main() {
 	var store shortenService.URLStorage
 	var fileStorage *storage.FileStorage
 	var db storage.Database
+	var postgres *storage.Postgres
 
-	postgres, err := storage.NewPostgres(context.Background(), cfg.DSN)
+	err := runMigrations(cfg.DSN)
 	if err != nil {
-		log.Printf("Postgres unavailable: %v", err)
+		log.Printf("Migration failed: %v", err)
+	} else {
+		postgres, err = storage.NewPostgres(context.Background(), cfg.DSN)
+		if err != nil {
+			log.Printf("Postgres unavailable: %v", err)
+		}
+	}
 
+	if postgres != nil {
+		store = postgres
+		db = postgres
+		defer postgres.Close(context.Background())
+	} else {
 		fileStorage, err = storage.NewFileStorage(cfg.StorageFile)
 		if err != nil {
 			log.Printf("File unavailable: %v", err)
@@ -33,10 +49,6 @@ func main() {
 			store = fileStorage
 			defer fileStorage.Close()
 		}
-	} else {
-		store = postgres
-		db = postgres
-		defer postgres.Close(context.Background())
 	}
 
 	service := shortenService.NewShortenService(store, cfg.BaseURL)
@@ -60,4 +72,23 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to start server", zap.Error(err))
 	}
+}
+
+func runMigrations(dsn string) error {
+	m, err := migrate.New(
+		"file://migrations",
+		dsn,
+	)
+	if err != nil {
+		return err
+	}
+
+	defer m.Close()
+
+	err = m.Up()
+	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
+		return err
+	}
+
+	return nil
 }
