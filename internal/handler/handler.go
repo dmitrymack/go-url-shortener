@@ -7,12 +7,13 @@ import (
 	"net/http"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
+	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
 )
 
 type Handler struct {
 	service  *service.ShortenService
-	database service.Database
+	database storage.Database
 }
 
 type RequestObject struct {
@@ -23,7 +24,7 @@ type ResponseObject struct {
 	Result string `json:"result"`
 }
 
-func NewHandler(s *service.ShortenService, db service.Database) *Handler {
+func NewHandler(s *service.ShortenService, db storage.Database) *Handler {
 	return &Handler{
 		service:  s,
 		database: db,

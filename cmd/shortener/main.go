@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"log"
 	"net/http"
 
@@ -18,48 +17,29 @@ import (
 
 func main() {
 	cfg := config.NewConfig()
-	store := storage.NewStorage()
-	var db shortenService.Database
+	var store shortenService.URLStorage
+	var fileStorage *storage.FileStorage
+	var db storage.Database
 
-	postgres, err := shortenService.NewPostgres(context.Background(), cfg.DSN)
+	postgres, err := storage.NewPostgres(context.Background(), cfg.DSN)
 	if err != nil {
-		log.Printf(" Postgres unavailable: %v", err)
+		log.Printf("Postgres unavailable: %v", err)
+
+		fileStorage, err = storage.NewFileStorage(cfg.StorageFile)
+		if err != nil {
+			log.Printf("File unavailable: %v", err)
+			store = storage.NewStorage()
+		} else {
+			store = fileStorage
+			defer fileStorage.Close()
+		}
 	} else {
+		store = postgres
 		db = postgres
 		defer postgres.Close(context.Background())
 	}
 
-	consumer, err := shortenService.NewConsumer(cfg.StorageFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer consumer.Close()
-
-	for {
-		event, err := consumer.ReadEvent()
-
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		err = store.Set(event.ShortURL, event.OriginalURL)
-
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	producer, err := shortenService.NewProducer(cfg.StorageFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer producer.Close()
-
-	service := shortenService.NewShortenService(store, producer, cfg.BaseURL)
+	service := shortenService.NewShortenService(store, cfg.BaseURL)
 	h := handler.NewHandler(service, db)
 
 	logger, err := zap.NewDevelopment()

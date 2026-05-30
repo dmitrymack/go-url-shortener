@@ -1,4 +1,4 @@
-package service
+package storage
 
 import (
 	"context"
@@ -32,4 +32,28 @@ func NewPostgres(ctx context.Context, connString string) (*Postgres, error) {
 	return &Postgres{
 		Conn: conn,
 	}, nil
+}
+
+func (p *Postgres) Get(key string) (string, bool) {
+	var originalURL string
+	err := p.Conn.QueryRow(
+		context.Background(),
+		"SELECT original_url FROM short_urls WHERE url = $1",
+		key,
+	).Scan(&originalURL)
+
+	if err != nil {
+		return "", false
+	}
+
+	return originalURL, true
+}
+
+func (p *Postgres) Set(key string, value string) error {
+	_, err := p.Conn.Exec(context.Background(), "INSERT INTO short_urls(url, original_url) VALUES($1, $2)", key, value)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
