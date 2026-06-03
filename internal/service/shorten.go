@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"net/url"
@@ -11,16 +12,12 @@ import (
 type URLStorage interface {
 	Get(key string) (string, bool)
 	Set(key string, value string) error
+	SetBatch(ctx context.Context, batchItems []storage.BatchItem) error
 }
 
 type ShortenService struct {
 	storage URLStorage
 	baseURL string
-}
-
-type ShortenResult struct {
-	ID       string
-	ShortURL string
 }
 
 func NewShortenService(s URLStorage, baseURL string) *ShortenService {
@@ -54,6 +51,34 @@ func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
 
 		return res, nil
 	}
+}
+
+func (s *ShortenService) CreateBatchShortURL(originURLs []string) ([]string, error) {
+	items := make([]storage.BatchItem, 0, len(originURLs))
+	res := make([]string, 0, len(originURLs))
+
+	for _, originURL := range originURLs {
+		id := generateID()
+
+		items = append(items, storage.BatchItem{
+			ID:        id,
+			OriginURL: originURL,
+		})
+
+		shortURL, err := url.JoinPath(s.baseURL, id)
+		if err != nil {
+			return make([]string, 0), err
+		}
+
+		res = append(res, shortURL)
+	}
+
+	err := s.storage.SetBatch(context.Background(), items)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func generateID() string {

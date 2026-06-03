@@ -24,6 +24,16 @@ type ResponseObject struct {
 	Result string `json:"result"`
 }
 
+type BatchRequest struct {
+	CorrelationID string `json:"correlation_id"`
+	OriginalURL   string `json:"original_url"`
+}
+
+type BatchResponse struct {
+	CorrelationID string `json:"correlation_id"`
+	ShortURL      string `json:"short_url"`
+}
+
 func NewHandler(s *service.ShortenService, db storage.Database) *Handler {
 	return &Handler{
 		service:  s,
@@ -120,4 +130,43 @@ func (h *Handler) PingDatabase(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (h *Handler) SetBatchURL(w http.ResponseWriter, r *http.Request) {
+	var req []BatchRequest
+	var resp []BatchResponse
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	originURLs := make([]string, 0, len(req))
+	for _, item := range req {
+		originURLs = append(originURLs, item.OriginalURL)
+	}
+
+	shortURLs, err := h.service.CreateBatchShortURL(originURLs)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	for i, shortURL := range shortURLs {
+		resp = append(resp, BatchResponse{
+			CorrelationID: req[i].CorrelationID,
+			ShortURL:      shortURL,
+		})
+	}
+
+	respJson, err := json.Marshal(resp)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respJson)
 }

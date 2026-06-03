@@ -1,6 +1,9 @@
 package storage
 
-import "errors"
+import (
+	"context"
+	"errors"
+)
 
 var ErrDuplicateKey = errors.New("duplicate key")
 
@@ -23,5 +26,15 @@ func (s *Storage) Set(key string, value string) error {
 	}
 
 	s.data[key] = value
+	return nil
+}
+
+func (s *Storage) SetBatch(ctx context.Context, batchItems []BatchItem) error {
+	for _, item := range batchItems {
+		if err := s.Set(item.ID, item.OriginURL); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }

@@ -11,6 +11,11 @@ type Database interface {
 	Close(context.Context) error
 }
 
+type BatchItem struct {
+	ID        string
+	OriginURL string
+}
+
 type Postgres struct {
 	Conn *pgx.Conn
 }
@@ -56,4 +61,24 @@ func (p *Postgres) Set(key string, value string) error {
 	}
 
 	return nil
+}
+
+func (p *Postgres) SetBatch(ctx context.Context, batchItems []BatchItem) error {
+	tx, err := p.Conn.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, item := range batchItems {
+		_, err = p.Conn.Exec(ctx,
+			"INSERT INTO short_urls(url, original_url) VALUES($1, $2)",
+			item.ID, item.OriginURL,
+		)
+		if err != nil {
+			tx.Rollback(ctx)
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }

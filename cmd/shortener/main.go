@@ -62,10 +62,13 @@ func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler)
-	r.Post("/", h.SetShortUrl)
+
 	r.Get("/{id}", h.GetUrlById)
-	r.Post("/api/shorten", h.SetShortUrlByJSON)
 	r.Get("/ping", h.PingDatabase)
+
+	r.Post("/", h.SetShortUrl)
+	r.Post("/api/shorten", h.SetShortUrlByJSON)
+	r.Post("/api/shorten/batch", h.SetBatchURL)
 
 	err = http.ListenAndServe(cfg.ServerAddress, r)
 

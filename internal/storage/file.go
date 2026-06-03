@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -72,6 +73,16 @@ func (f *FileStorage) Set(key string, value string) error {
 	}
 
 	f.data[key] = value
+	return nil
+}
+
+func (f *FileStorage) SetBatch(ctx context.Context, batchItems []BatchItem) error {
+	for _, item := range batchItems {
+		if err := f.Set(item.ID, item.OriginURL); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
