@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"errors"
 	"math/rand"
 	"net/url"
@@ -11,27 +12,17 @@ import (
 type URLStorage interface {
 	Get(key string) (string, bool)
 	Set(key string, value string) error
-}
-
-type URLWriter interface {
-	WriteEvent(event *Event) error
+	SetBatch(ctx context.Context, batchItems []storage.BatchItem) error
 }
 
 type ShortenService struct {
 	storage URLStorage
-	writer  URLWriter
 	baseURL string
 }
 
-type ShortenResult struct {
-	ID       string
-	ShortURL string
-}
-
-func NewShortenService(s URLStorage, w URLWriter, baseURL string) *ShortenService {
+func NewShortenService(s URLStorage, baseURL string) *ShortenService {
 	return &ShortenService{
 		storage: s,
-		writer:  w,
 		baseURL: baseURL,
 	}
 }
@@ -58,17 +49,36 @@ func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
 			return "", err
 		}
 
-		err = s.writer.WriteEvent(&Event{
-			ShortURL:    id,
-			OriginalURL: originURL,
-		})
-
-		if err != nil {
-			return "", err
-		}
-
 		return res, nil
 	}
+}
+
+func (s *ShortenService) CreateBatchShortURL(originURLs []string) ([]string, error) {
+	items := make([]storage.BatchItem, 0, len(originURLs))
+	res := make([]string, 0, len(originURLs))
+
+	for _, originURL := range originURLs {
+		id := generateID()
+
+		items = append(items, storage.BatchItem{
+			ID:        id,
+			OriginURL: originURL,
+		})
+
+		shortURL, err := url.JoinPath(s.baseURL, id)
+		if err != nil {
+			return make([]string, 0), err
+		}
+
+		res = append(res, shortURL)
+	}
+
+	err := s.storage.SetBatch(context.Background(), items)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }
 
 func generateID() string {

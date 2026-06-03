@@ -11,6 +11,7 @@ type Config struct {
 	ServerAddress string
 	BaseURL       string
 	StorageFile   string
+	DSN           string
 }
 
 func NewConfig() *Config {
@@ -19,6 +20,7 @@ func NewConfig() *Config {
 	flag.StringVar(&cfg.ServerAddress, "a", "localhost:8080", "Input host and port of server")
 	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "Base URL")
 	flag.StringVar(&cfg.StorageFile, "f", "storage.jsonl", "Storage file name")
+	flag.StringVar(&cfg.DSN, "d", "", "Input Database DSN")
 
 	flag.Parse()
 
@@ -32,6 +34,10 @@ func NewConfig() *Config {
 
 	if envStorageFile := os.Getenv("FILE_STORAGE_PATH"); envStorageFile != "" {
 		cfg.StorageFile = envStorageFile
+	}
+
+	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
+		cfg.DSN = envDSN
 	}
 
 	_, err := url.ParseRequestURI(cfg.BaseURL)
