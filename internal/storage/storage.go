@@ -20,18 +20,18 @@ func (s *Storage) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func (s *Storage) Set(key string, value string) error {
+func (s *Storage) Set(key string, value string) (string, error) {
 	if _, ok := s.data[key]; ok {
-		return ErrDuplicateKey
+		return key, ErrDuplicateKey
 	}
 
 	s.data[key] = value
-	return nil
+	return key, nil
 }
 
 func (s *Storage) SetBatch(ctx context.Context, batchItems []BatchItem) error {
 	for _, item := range batchItems {
-		if err := s.Set(item.ID, item.OriginURL); err != nil {
+		if _, err := s.Set(item.ID, item.OriginURL); err != nil {
 			return err
 		}
 	}

@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -57,6 +58,12 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shortURL, err := h.service.CreateShortURL(originURL)
+	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
+		w.WriteHeader(http.StatusConflict)
+		w.Write([]byte(shortURL))
+		return
+	}
+
 	if err != nil {
 		log.Printf("CreateShortURL error: %v", err)
 
@@ -95,8 +102,11 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shortURL, err := h.service.CreateShortURL(reqObj.URL)
+	statusCode := http.StatusCreated
 
-	if err != nil {
+	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
+		statusCode = http.StatusConflict
+	} else if err != nil {
 		log.Printf("CreateShortURL error: %v", err)
 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -114,7 +124,7 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusCreated)
+	w.WriteHeader(statusCode)
 	w.Write(resp)
 }
 

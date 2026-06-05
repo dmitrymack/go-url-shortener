@@ -11,7 +11,7 @@ import (
 
 type URLStorage interface {
 	Get(key string) (string, bool)
-	Set(key string, value string) error
+	Set(key string, value string) (string, error)
 	SetBatch(ctx context.Context, batchItems []storage.BatchItem) error
 }
 
@@ -35,9 +35,18 @@ func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
 	for {
 		id := generateID()
 
-		err := s.storage.Set(id, originURL)
+		id, err := s.storage.Set(id, originURL)
 		if errors.Is(err, storage.ErrDuplicateKey) {
 			continue
+		}
+
+		if errors.Is(err, storage.ErrDuplicateOriginalURL) {
+			res, err := url.JoinPath(s.baseURL, id)
+			if err != nil {
+				return "", err
+			}
+
+			return res, storage.ErrDuplicateOriginalURL
 		}
 
 		if err != nil {

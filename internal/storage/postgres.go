@@ -2,9 +2,14 @@ package storage
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 )
+
+var ErrDuplicateOriginalURL = errors.New("duplicate original url")
 
 type Database interface {
 	Ping(context.Context) error
@@ -43,7 +48,7 @@ func (p *Postgres) Get(key string) (string, bool) {
 	var originalURL string
 	err := p.Conn.QueryRow(
 		context.Background(),
-		"SELECT original_url FROM short_urls WHERE url = $1",
+		"SELECT original_url FROM short_urls WHERE short_url_id = $1",
 		key,
 	).Scan(&originalURL)
 
@@ -54,13 +59,33 @@ func (p *Postgres) Get(key string) (string, bool) {
 	return originalURL, true
 }
 
-func (p *Postgres) Set(key string, value string) error {
-	_, err := p.Conn.Exec(context.Background(), "INSERT INTO short_urls(url, original_url) VALUES($1, $2)", key, value)
-	if err != nil {
-		return err
+func (p *Postgres) Set(key string, value string) (string, error) {
+	var pgErr *pgconn.PgError
+
+	_, err := p.Conn.Exec(context.Background(), "INSERT INTO short_urls(short_url_id, original_url) VALUES($1, $2)", key, value)
+
+	if errors.As(err, &pgErr) {
+		if pgErr.Code == pgerrcode.UniqueViolation {
+			duplicateShortURL := ""
+			err = p.Conn.QueryRow(
+				context.Background(),
+				"SELECT short_url_id FROM short_urls WHERE original_url = $1",
+				value,
+			).Scan(&duplicateShortURL)
+
+			if err != nil {
+				return "", err
+			}
+
+			return duplicateShortURL, ErrDuplicateOriginalURL
+		}
 	}
 
-	return nil
+	if err != nil {
+		return "", err
+	}
+
+	return key, nil
 }
 
 func (p *Postgres) SetBatch(ctx context.Context, batchItems []BatchItem) error {

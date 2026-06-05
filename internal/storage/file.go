@@ -58,9 +58,9 @@ func (f *FileStorage) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func (f *FileStorage) Set(key string, value string) error {
+func (f *FileStorage) Set(key string, value string) (string, error) {
 	if _, ok := f.data[key]; ok {
-		return ErrDuplicateKey
+		return key, ErrDuplicateKey
 	}
 
 	err := writeEvent(f, &Event{
@@ -69,16 +69,16 @@ func (f *FileStorage) Set(key string, value string) error {
 	})
 
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	f.data[key] = value
-	return nil
+	return key, nil
 }
 
 func (f *FileStorage) SetBatch(ctx context.Context, batchItems []BatchItem) error {
 	for _, item := range batchItems {
-		if err := f.Set(item.ID, item.OriginURL); err != nil {
+		if _, err := f.Set(item.ID, item.OriginURL); err != nil {
 			return err
 		}
 	}
