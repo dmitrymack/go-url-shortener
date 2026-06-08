@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -57,7 +58,7 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, err := h.service.CreateShortURL(originURL)
+	shortURL, err := h.service.CreateShortURL(r.Context(), originURL)
 	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte(shortURL))
@@ -101,7 +102,7 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	shortURL, err := h.service.CreateShortURL(reqObj.URL)
+	shortURL, err := h.service.CreateShortURL(r.Context(), reqObj.URL)
 	statusCode := http.StatusCreated
 
 	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
@@ -178,5 +179,29 @@ func (h *Handler) SetBatchURL(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
+	w.Write(respJson)
+}
+
+func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
+	userId := r.Context().Value(contextKeys.UserIDContextKey).(string)
+	userUrls, err := h.service.GetUrlsByUser(userId)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	if len(userUrls) == 0 {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	respJson, err := json.Marshal(userUrls)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
 	w.Write(respJson)
 }

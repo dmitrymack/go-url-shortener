@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 )
@@ -58,7 +59,7 @@ func (f *FileStorage) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func (f *FileStorage) Set(key string, value string) (string, error) {
+func (f *FileStorage) Set(ctx context.Context, key string, value string) (string, error) {
 	if _, ok := f.data[key]; ok {
 		return key, ErrDuplicateKey
 	}
@@ -76,9 +77,9 @@ func (f *FileStorage) Set(key string, value string) (string, error) {
 	return key, nil
 }
 
-func (f *FileStorage) SetBatch(ctx context.Context, batchItems []BatchItem) error {
+func (f *FileStorage) SetBatch(ctx context.Context, batchItems []URLRecord) error {
 	for _, item := range batchItems {
-		if _, err := f.Set(item.ID, item.OriginURL); err != nil {
+		if _, err := f.Set(ctx, item.ID, item.OriginURL); err != nil {
 			return err
 		}
 	}
@@ -119,4 +120,8 @@ func writeEvent(f *FileStorage, event *Event) error {
 
 	_, err = f.file.Write(data)
 	return err
+}
+
+func (f *FileStorage) GetUrlsByUser(userID string) ([]URLRecord, error) {
+	return nil, errors.New("not implemented")
 }

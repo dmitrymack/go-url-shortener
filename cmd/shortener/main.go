@@ -61,10 +61,11 @@ func main() {
 	defer logger.Sync()
 
 	r := chi.NewRouter()
-	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler)
+	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler, middleware.AuthorizerHandler)
 
 	r.Get("/{id}", h.GetUrlById)
 	r.Get("/ping", h.PingDatabase)
+	r.Get("/api/user/urls", h.GetUserURLS)
 
 	r.Post("/", h.SetShortUrl)
 	r.Post("/api/shorten", h.SetShortUrlByJSON)

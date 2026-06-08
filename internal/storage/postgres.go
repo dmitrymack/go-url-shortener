@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -16,9 +17,9 @@ type Database interface {
 	Close(context.Context) error
 }
 
-type BatchItem struct {
-	ID        string
-	OriginURL string
+type URLRecord struct {
+	ID        string `json:"short_url"`
+	OriginURL string `json:"original_url"`
 }
 
 type Postgres struct {
@@ -59,10 +60,15 @@ func (p *Postgres) Get(key string) (string, bool) {
 	return originalURL, true
 }
 
-func (p *Postgres) Set(key string, value string) (string, error) {
+func (p *Postgres) Set(ctx context.Context, key string, value string) (string, error) {
 	var pgErr *pgconn.PgError
 
-	_, err := p.Conn.Exec(context.Background(), "INSERT INTO short_urls(short_url_id, original_url) VALUES($1, $2)", key, value)
+	userID := ctx.Value(contextKeys.UserIDContextKey)
+
+	_, err := p.Conn.Exec(ctx,
+		"INSERT INTO short_urls(short_url_id, original_url, user_id) VALUES($1, $2, $3)",
+		key, value, userID,
+	)
 
 	if errors.As(err, &pgErr) {
 		if pgErr.Code == pgerrcode.UniqueViolation {
@@ -88,16 +94,17 @@ func (p *Postgres) Set(key string, value string) (string, error) {
 	return key, nil
 }
 
-func (p *Postgres) SetBatch(ctx context.Context, batchItems []BatchItem) error {
+func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord) error {
 	tx, err := p.Conn.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
 
+	userID := ctx.Value(contextKeys.UserIDContextKey)
 	for _, item := range batchItems {
 		_, err = tx.Exec(ctx,
-			"INSERT INTO short_urls(short_url_id, original_url) VALUES($1, $2)",
-			item.ID, item.OriginURL,
+			"INSERT INTO short_urls(short_url_id, original_url, user_id) VALUES($1, $2, $3)",
+			item.ID, item.OriginURL, userID,
 		)
 		if err != nil {
 			tx.Rollback(ctx)
@@ -106,4 +113,38 @@ func (p *Postgres) SetBatch(ctx context.Context, batchItems []BatchItem) error {
 	}
 
 	return tx.Commit(ctx)
+}
+
+func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
+	rows, err := p.Conn.Query(
+		context.Background(),
+		"SELECT short_url_id, original_url FROM short_urls WHERE user_id = $1",
+		userID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]URLRecord, 0)
+
+	for rows.Next() {
+		var item URLRecord
+
+		err := rows.Scan(
+			&item.ID,
+			&item.OriginURL,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return items, nil
 }

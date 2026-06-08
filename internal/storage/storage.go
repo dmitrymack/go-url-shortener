@@ -20,7 +20,7 @@ func (s *Storage) Get(key string) (string, bool) {
 	return value, ok
 }
 
-func (s *Storage) Set(key string, value string) (string, error) {
+func (s *Storage) Set(ctx context.Context, key string, value string) (string, error) {
 	if _, ok := s.data[key]; ok {
 		return key, ErrDuplicateKey
 	}
@@ -29,12 +29,16 @@ func (s *Storage) Set(key string, value string) (string, error) {
 	return key, nil
 }
 
-func (s *Storage) SetBatch(ctx context.Context, batchItems []BatchItem) error {
+func (s *Storage) SetBatch(ctx context.Context, batchItems []URLRecord) error {
 	for _, item := range batchItems {
-		if _, err := s.Set(item.ID, item.OriginURL); err != nil {
+		if _, err := s.Set(ctx, item.ID, item.OriginURL); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (s *Storage) GetUrlsByUser(userID string) ([]URLRecord, error) {
+	return nil, errors.New("not implemented")
 }

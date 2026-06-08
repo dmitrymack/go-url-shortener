@@ -11,8 +11,10 @@ import (
 
 type URLStorage interface {
 	Get(key string) (string, bool)
-	Set(key string, value string) (string, error)
-	SetBatch(ctx context.Context, batchItems []storage.BatchItem) error
+	Set(ctx context.Context, key string, value string) (string, error)
+	SetBatch(ctx context.Context, batchItems []storage.URLRecord) error
+
+	GetUrlsByUser(userID string) ([]storage.URLRecord, error)
 }
 
 type ShortenService struct {
@@ -31,11 +33,31 @@ func (s *ShortenService) GetOriginalURL(id string) (string, bool) {
 	return s.storage.Get(id)
 }
 
-func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
+func (s *ShortenService) GetUrlsByUser(userID string) ([]storage.URLRecord, error) {
+	urls, err := s.storage.GetUrlsByUser(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range urls {
+		urls[i].ID, err = url.JoinPath(
+			s.baseURL,
+			urls[i].ID,
+		)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return urls, nil
+}
+
+func (s *ShortenService) CreateShortURL(ctx context.Context, originURL string) (string, error) {
 	for {
 		id := generateID()
 
-		id, err := s.storage.Set(id, originURL)
+		id, err := s.storage.Set(ctx, id, originURL)
 		if errors.Is(err, storage.ErrDuplicateKey) {
 			continue
 		}
@@ -63,13 +85,13 @@ func (s *ShortenService) CreateShortURL(originURL string) (string, error) {
 }
 
 func (s *ShortenService) CreateBatchShortURL(originURLs []string) ([]string, error) {
-	items := make([]storage.BatchItem, 0, len(originURLs))
+	items := make([]storage.URLRecord, 0, len(originURLs))
 	res := make([]string, 0, len(originURLs))
 
 	for _, originURL := range originURLs {
 		id := generateID()
 
-		items = append(items, storage.BatchItem{
+		items = append(items, storage.URLRecord{
 			ID:        id,
 			OriginURL: originURL,
 		})
