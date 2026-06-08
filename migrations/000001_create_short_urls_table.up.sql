@@ -1,6 +1,6 @@
 CREATE TABLE short_urls (
     id SERIAL PRIMARY KEY,
-    original_url VARCHAR(255) NOT NULL,
+    original_url TEXT NOT NULL,
     short_url_id VARCHAR(255) NOT NULL
 );
 

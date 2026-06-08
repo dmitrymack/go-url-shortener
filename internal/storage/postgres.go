@@ -95,7 +95,7 @@ func (p *Postgres) SetBatch(ctx context.Context, batchItems []BatchItem) error {
 	}
 
 	for _, item := range batchItems {
-		_, err = p.Conn.Exec(ctx,
+		_, err = tx.Exec(ctx,
 			"INSERT INTO short_urls(short_url_id, original_url) VALUES($1, $2)",
 			item.ID, item.OriginURL,
 		)
