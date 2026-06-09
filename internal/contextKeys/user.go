@@ -1,4 +1,7 @@
 package contextKeys
 
-const UserTokenCookieName = "userToken"
-const UserIDContextKey = "userID"
+type ContextKey string
+type CookieKey string
+
+const UserTokenCookieName CookieKey = "userToken"
+const UserIDContextKey ContextKey = "userID"

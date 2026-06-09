@@ -12,14 +12,14 @@ import (
 
 func AuthorizerHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := (*http.Request).Cookie(r, contextKeys.UserTokenCookieName)
+		cookie, err := (*http.Request).Cookie(r, string(contextKeys.UserTokenCookieName))
 
 		if errors.Is(err, http.ErrNoCookie) {
 			userID := generateUUID(16)
 
 			token, _ := service.BuildJWTString(userID)
 			http.SetCookie(w, &http.Cookie{
-				Name:  contextKeys.UserTokenCookieName,
+				Name:  string(contextKeys.UserTokenCookieName),
 				Value: token,
 			})
 

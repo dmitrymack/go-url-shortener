@@ -126,7 +126,7 @@ func TestGetUrlById(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewStorage()
 			if tt.want.originURL != "" {
-				store.Set(tt.id, tt.want.originURL)
+				store.Set(context.Background(), tt.id, tt.want.originURL)
 			}
 			mockDB := &MockDB{}
 			service := shortenService.NewShortenService(store, "http://localhost:8080")
