@@ -84,9 +84,9 @@ func TestSetShortUrl(t *testing.T) {
 				id := strings.TrimPrefix(shortURL, "http://localhost:8080/")
 				assert.NotEmpty(t, id)
 
-				value, ok := service.GetOriginalURL(id)
+				value, err := service.GetOriginalURL(id)
 
-				assert.True(t, ok)
+				assert.True(t, err == nil)
 				assert.Equal(t, tt.body, value)
 			}
 		})
@@ -234,9 +234,9 @@ func TestSetShortURLByJSON(t *testing.T) {
 
 				assert.NotEmpty(t, id)
 
-				value, ok := service.GetOriginalURL(id)
+				value, err := service.GetOriginalURL(id)
 
-				assert.True(t, ok)
+				assert.True(t, err == nil)
 				assert.Equal(t, "https://test.com", value)
 			}
 		})

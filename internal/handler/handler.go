@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -78,8 +79,12 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	value, ok := h.service.GetOriginalURL(id)
-	if !ok {
+	value, err := h.service.GetOriginalURL(id)
+	if errors.Is(err, storage.ErrDeleted) {
+		w.WriteHeader(http.StatusGone)
+		return
+	}
+	if err != nil {
 		http.Error(w, http.StatusText(http.StatusNotFound), http.StatusBadRequest)
 		return
 	}
@@ -158,7 +163,7 @@ func (h *Handler) SetBatchURL(w http.ResponseWriter, r *http.Request) {
 		originURLs = append(originURLs, item.OriginalURL)
 	}
 
-	shortURLs, err := h.service.CreateBatchShortURL(originURLs)
+	shortURLs, err := h.service.CreateBatchShortURL(r.Context(), originURLs)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -204,4 +209,23 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write(respJson)
+}
+
+func (h *Handler) DeleteUserUrls(w http.ResponseWriter, r *http.Request) {
+	var ids []string
+	userId := r.Context().Value(contextKeys.UserIDContextKey).(string)
+
+	err := json.NewDecoder(r.Body).Decode(&ids)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		return
+	}
+
+	go func() {
+		if err := h.service.SetDeletedBatch(context.Background(), ids, userId); err != nil {
+			log.Println(err)
+		}
+	}()
+
+	w.WriteHeader(http.StatusAccepted)
 }

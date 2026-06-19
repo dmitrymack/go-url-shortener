@@ -10,9 +10,10 @@ import (
 )
 
 type URLStorage interface {
-	Get(key string) (string, bool)
+	Get(key string) (string, error)
 	Set(ctx context.Context, key string, value string) (string, error)
 	SetBatch(ctx context.Context, batchItems []storage.URLRecord) error
+	SetDeletedBatch(ctx context.Context, keys []string, userID string) error
 
 	GetUrlsByUser(userID string) ([]storage.URLRecord, error)
 }
@@ -29,7 +30,7 @@ func NewShortenService(s URLStorage, baseURL string) *ShortenService {
 	}
 }
 
-func (s *ShortenService) GetOriginalURL(id string) (string, bool) {
+func (s *ShortenService) GetOriginalURL(id string) (string, error) {
 	return s.storage.Get(id)
 }
 
@@ -84,7 +85,7 @@ func (s *ShortenService) CreateShortURL(ctx context.Context, originURL string) (
 	}
 }
 
-func (s *ShortenService) CreateBatchShortURL(originURLs []string) ([]string, error) {
+func (s *ShortenService) CreateBatchShortURL(ctx context.Context, originURLs []string) ([]string, error) {
 	items := make([]storage.URLRecord, 0, len(originURLs))
 	res := make([]string, 0, len(originURLs))
 
@@ -104,12 +105,16 @@ func (s *ShortenService) CreateBatchShortURL(originURLs []string) ([]string, err
 		res = append(res, shortURL)
 	}
 
-	err := s.storage.SetBatch(context.Background(), items)
+	err := s.storage.SetBatch(ctx, items)
 	if err != nil {
 		return nil, err
 	}
 
 	return res, nil
+}
+
+func (s *ShortenService) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
+	return s.storage.SetDeletedBatch(ctx, keys, userID)
 }
 
 func generateID() string {

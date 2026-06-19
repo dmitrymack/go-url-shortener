@@ -54,9 +54,12 @@ func NewFileStorage(filename string) (*FileStorage, error) {
 	return store, nil
 }
 
-func (f *FileStorage) Get(key string) (string, bool) {
+func (f *FileStorage) Get(key string) (string, error) {
 	value, ok := f.data[key]
-	return value, ok
+	if !ok {
+		return "", ErrNotFound
+	}
+	return value, nil
 }
 
 func (f *FileStorage) Set(ctx context.Context, key string, value string) (string, error) {
@@ -124,4 +127,12 @@ func writeEvent(f *FileStorage, event *Event) error {
 
 func (f *FileStorage) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	return nil, errors.New("not implemented")
+}
+
+func (f *FileStorage) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
+	for _, key := range keys {
+		delete(f.data, key)
+	}
+
+	return nil
 }

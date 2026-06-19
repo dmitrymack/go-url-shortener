@@ -71,6 +71,8 @@ func main() {
 	r.Post("/api/shorten", h.SetShortUrlByJSON)
 	r.Post("/api/shorten/batch", h.SetBatchURL)
 
+	r.Delete("/api/user/urls", h.DeleteUserUrls)
+
 	err = http.ListenAndServe(cfg.ServerAddress, r)
 
 	if err != nil {

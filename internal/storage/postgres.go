@@ -45,19 +45,23 @@ func NewPostgres(ctx context.Context, connString string) (*Postgres, error) {
 	}, nil
 }
 
-func (p *Postgres) Get(key string) (string, bool) {
+func (p *Postgres) Get(key string) (string, error) {
 	var originalURL string
+	var isDeleted bool
 	err := p.Conn.QueryRow(
 		context.Background(),
-		"SELECT original_url FROM short_urls WHERE short_url_id = $1",
+		"SELECT original_url, is_deleted FROM short_urls WHERE short_url_id = $1",
 		key,
-	).Scan(&originalURL)
+	).Scan(&originalURL, &isDeleted)
 
+	if isDeleted {
+		return "", ErrDeleted
+	}
 	if err != nil {
-		return "", false
+		return "", err
 	}
 
-	return originalURL, true
+	return originalURL, nil
 }
 
 func (p *Postgres) Set(ctx context.Context, key string, value string) (string, error) {
@@ -118,7 +122,7 @@ func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord) error {
 func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	rows, err := p.Conn.Query(
 		context.Background(),
-		"SELECT short_url_id, original_url FROM short_urls WHERE user_id = $1",
+		"SELECT short_url_id, original_url FROM short_urls WHERE user_id = $1 AND is_deleted = false",
 		userID,
 	)
 	if err != nil {
@@ -147,4 +151,14 @@ func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	}
 
 	return items, nil
+}
+
+func (p *Postgres) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
+	_, err := p.Conn.Exec(
+		ctx,
+		"UPDATE short_urls SET is_deleted = true WHERE user_id = $1 AND short_url_id = ANY($2)",
+		userID, keys,
+	)
+
+	return err
 }
