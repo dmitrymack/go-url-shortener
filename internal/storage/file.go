@@ -7,11 +7,13 @@ import (
 	"errors"
 	"io"
 	"os"
+	"sync"
 )
 
 type FileStorage struct {
 	data map[string]string
 	file *os.File
+	mu   sync.RWMutex
 }
 
 type Event struct {
@@ -55,6 +57,8 @@ func NewFileStorage(filename string) (*FileStorage, error) {
 }
 
 func (f *FileStorage) Get(key string) (string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	value, ok := f.data[key]
 	if !ok {
 		return "", ErrNotFound
@@ -63,6 +67,8 @@ func (f *FileStorage) Get(key string) (string, error) {
 }
 
 func (f *FileStorage) Set(ctx context.Context, key string, value string) (string, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	if _, ok := f.data[key]; ok {
 		return key, ErrDuplicateKey
 	}
@@ -130,6 +136,8 @@ func (f *FileStorage) GetUrlsByUser(userID string) ([]URLRecord, error) {
 }
 
 func (f *FileStorage) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
 	for _, key := range keys {
 		delete(f.data, key)
 	}

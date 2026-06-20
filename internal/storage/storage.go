@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"sync"
 )
 
 var ErrDuplicateKey = errors.New("duplicate key")
@@ -11,6 +12,7 @@ var ErrDeleted = errors.New("deleted")
 
 type Storage struct {
 	data map[string]string
+	mu   sync.RWMutex
 }
 
 func NewStorage() *Storage {
@@ -18,6 +20,8 @@ func NewStorage() *Storage {
 }
 
 func (s *Storage) Get(key string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	value, ok := s.data[key]
 	if !ok {
 		return "", ErrNotFound
@@ -26,6 +30,8 @@ func (s *Storage) Get(key string) (string, error) {
 }
 
 func (s *Storage) Set(ctx context.Context, key string, value string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if _, ok := s.data[key]; ok {
 		return key, ErrDuplicateKey
 	}
@@ -49,6 +55,8 @@ func (s *Storage) GetUrlsByUser(userID string) ([]URLRecord, error) {
 }
 
 func (s *Storage) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	for _, key := range keys {
 		delete(s.data, key)
 	}
