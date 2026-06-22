@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrDuplicateOriginalURL = errors.New("duplicate original url")
@@ -23,32 +24,33 @@ type URLRecord struct {
 }
 
 type Postgres struct {
-	Conn *pgx.Conn
+	Pool *pgxpool.Pool
 }
 
 func (p *Postgres) Ping(ctx context.Context) error {
-	return p.Conn.Ping(ctx)
+	return p.Pool.Ping(ctx)
 }
 
 func (p *Postgres) Close(ctx context.Context) error {
-	return p.Conn.Close(ctx)
+	p.Pool.Close()
+	return nil
 }
 
 func NewPostgres(ctx context.Context, connString string) (*Postgres, error) {
-	conn, err := pgx.Connect(ctx, connString)
+	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
 		return nil, err
 	}
 
 	return &Postgres{
-		Conn: conn,
+		Pool: pool,
 	}, nil
 }
 
 func (p *Postgres) Get(key string) (string, error) {
 	var originalURL string
 	var isDeleted bool
-	err := p.Conn.QueryRow(
+	err := p.Pool.QueryRow(
 		context.Background(),
 		"SELECT original_url, is_deleted FROM short_urls WHERE short_url_id = $1",
 		key,
@@ -69,7 +71,7 @@ func (p *Postgres) Set(ctx context.Context, key string, value string) (string, e
 
 	userID := ctx.Value(contextKeys.UserIDContextKey)
 
-	_, err := p.Conn.Exec(ctx,
+	_, err := p.Pool.Exec(ctx,
 		"INSERT INTO short_urls(short_url_id, original_url, user_id) VALUES($1, $2, $3)",
 		key, value, userID,
 	)
@@ -77,7 +79,7 @@ func (p *Postgres) Set(ctx context.Context, key string, value string) (string, e
 	if errors.As(err, &pgErr) {
 		if pgErr.Code == pgerrcode.UniqueViolation {
 			duplicateShortURL := ""
-			err = p.Conn.QueryRow(
+			err = p.Pool.QueryRow(
 				context.Background(),
 				"SELECT short_url_id FROM short_urls WHERE original_url = $1",
 				value,
@@ -99,7 +101,7 @@ func (p *Postgres) Set(ctx context.Context, key string, value string) (string, e
 }
 
 func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord) error {
-	tx, err := p.Conn.BeginTx(ctx, pgx.TxOptions{})
+	tx, err := p.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
@@ -120,7 +122,7 @@ func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord) error {
 }
 
 func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
-	rows, err := p.Conn.Query(
+	rows, err := p.Pool.Query(
 		context.Background(),
 		"SELECT short_url_id, original_url FROM short_urls WHERE user_id = $1 AND is_deleted = false",
 		userID,
@@ -154,7 +156,7 @@ func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
 }
 
 func (p *Postgres) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
-	_, err := p.Conn.Exec(
+	_, err := p.Pool.Exec(
 		ctx,
 		"UPDATE short_urls SET is_deleted = true WHERE user_id = $1 AND short_url_id = ANY($2)",
 		userID, keys,
