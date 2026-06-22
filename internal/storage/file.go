@@ -67,8 +67,8 @@ func (f *FileStorage) Get(key string) (string, error) {
 }
 
 func (f *FileStorage) Set(ctx context.Context, key string, value string) (string, error) {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	if _, ok := f.data[key]; ok {
 		return key, ErrDuplicateKey
 	}
@@ -136,8 +136,8 @@ func (f *FileStorage) GetUrlsByUser(userID string) ([]URLRecord, error) {
 }
 
 func (f *FileStorage) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	for _, key := range keys {
 		delete(f.data, key)
 	}
