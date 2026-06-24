@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -68,8 +69,8 @@ func TestSetShortUrl(t *testing.T) {
 			r.Host = tt.host
 
 			w := httptest.NewRecorder()
-
-			h.SetShortUrl(w, r)
+			ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "test_set_user")
+			h.SetShortUrl(w, r.WithContext(ctx))
 
 			res := w.Result()
 			defer res.Body.Close()
@@ -100,21 +101,24 @@ func TestGetUrlById(t *testing.T) {
 	}
 
 	tests := []struct {
-		name string
-		id   string
-		want want
+		name   string
+		id     string
+		userID string
+		want   want
 	}{
 		{
-			name: "positive test",
-			id:   "abc123",
+			name:   "positive test",
+			id:     "abc123",
+			userID: "user_abc123",
 			want: want{
 				statusCode: http.StatusTemporaryRedirect,
 				originURL:  "https://test.com",
 			},
 		},
 		{
-			name: "url not found",
-			id:   "unknown",
+			name:   "url not found",
+			id:     "unknown",
+			userID: "user_unknown",
 			want: want{
 				statusCode: http.StatusBadRequest,
 				originURL:  "",
@@ -126,7 +130,7 @@ func TestGetUrlById(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewStorage()
 			if tt.want.originURL != "" {
-				store.Set(context.Background(), tt.id, tt.want.originURL)
+				store.Set(context.Background(), tt.id, tt.want.originURL, tt.userID)
 			}
 			mockDB := &MockDB{}
 			service := shortenService.NewShortenService(store, "http://localhost:8080")
@@ -213,7 +217,8 @@ func TestSetShortURLByJSON(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
-			h.SetShortUrlByJSON(w, r)
+			ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "test_set_json_user")
+			h.SetShortUrlByJSON(w, r.WithContext(ctx))
 
 			res := w.Result()
 			defer res.Body.Close()
