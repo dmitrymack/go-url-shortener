@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -213,7 +212,7 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) DeleteUserUrls(w http.ResponseWriter, r *http.Request) {
 	var ids []string
-	userId := r.Context().Value(contextKeys.UserIDContextKey).(string)
+	userID := r.Context().Value(contextKeys.UserIDContextKey).(string)
 
 	err := json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
@@ -221,11 +220,10 @@ func (h *Handler) DeleteUserUrls(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	go func() {
-		if err := h.service.SetDeletedBatch(context.Background(), ids, userId); err != nil {
-			log.Println(err)
-		}
-	}()
+	h.service.EnqueueDelete(service.DeleteTask{
+		UserID: userID,
+		IDs:    ids,
+	})
 
 	w.WriteHeader(http.StatusAccepted)
 }

@@ -3,30 +3,39 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"math/rand"
 	"net/url"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 )
 
 type URLStorage interface {
 	Get(key string) (string, error)
-	Set(ctx context.Context, key string, value string) (string, error)
-	SetBatch(ctx context.Context, batchItems []storage.URLRecord) error
+	Set(ctx context.Context, key string, value string, userID string) (string, error)
+	SetBatch(ctx context.Context, batchItems []storage.URLRecord, userID string) error
 	SetDeletedBatch(ctx context.Context, keys []string, userID string) error
 
 	GetUrlsByUser(userID string) ([]storage.URLRecord, error)
 }
 
+type DeleteTask struct {
+	UserID string
+	IDs    []string
+}
+
 type ShortenService struct {
-	storage URLStorage
-	baseURL string
+	storage     URLStorage
+	baseURL     string
+	deleteQueue chan DeleteTask
 }
 
 func NewShortenService(s URLStorage, baseURL string) *ShortenService {
 	return &ShortenService{
-		storage: s,
-		baseURL: baseURL,
+		storage:     s,
+		baseURL:     baseURL,
+		deleteQueue: make(chan DeleteTask, 100),
 	}
 }
 
@@ -55,10 +64,12 @@ func (s *ShortenService) GetUrlsByUser(userID string) ([]storage.URLRecord, erro
 }
 
 func (s *ShortenService) CreateShortURL(ctx context.Context, originURL string) (string, error) {
+	userID := ctx.Value(contextKeys.UserIDContextKey).(string)
+
 	for {
 		id := generateID()
 
-		id, err := s.storage.Set(ctx, id, originURL)
+		id, err := s.storage.Set(ctx, id, originURL, userID)
 		if errors.Is(err, storage.ErrDuplicateKey) {
 			continue
 		}
@@ -86,6 +97,7 @@ func (s *ShortenService) CreateShortURL(ctx context.Context, originURL string) (
 }
 
 func (s *ShortenService) CreateBatchShortURL(ctx context.Context, originURLs []string) ([]string, error) {
+	userID := ctx.Value(contextKeys.UserIDContextKey).(string)
 	items := make([]storage.URLRecord, 0, len(originURLs))
 	res := make([]string, 0, len(originURLs))
 
@@ -105,7 +117,7 @@ func (s *ShortenService) CreateBatchShortURL(ctx context.Context, originURLs []s
 		res = append(res, shortURL)
 	}
 
-	err := s.storage.SetBatch(ctx, items)
+	err := s.storage.SetBatch(ctx, items, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -115,6 +127,16 @@ func (s *ShortenService) CreateBatchShortURL(ctx context.Context, originURLs []s
 
 func (s *ShortenService) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
 	return s.storage.SetDeletedBatch(ctx, keys, userID)
+}
+
+func (s *ShortenService) StartDeleteWorker() {
+	go func() {
+		for task := range s.deleteQueue {
+			if err := s.storage.SetDeletedBatch(context.Background(), task.IDs, task.UserID); err != nil {
+				log.Println(err)
+			}
+		}
+	}()
 }
 
 func generateID() string {
@@ -128,4 +150,8 @@ func generateID() string {
 	}
 
 	return string(b)
+}
+
+func (s *ShortenService) EnqueueDelete(task DeleteTask) {
+	s.deleteQueue <- task
 }

@@ -53,6 +53,7 @@ func main() {
 
 	service := shortenService.NewShortenService(store, cfg.BaseURL)
 	h := handler.NewHandler(service, db)
+	service.StartDeleteWorker()
 
 	logger, err := zap.NewDevelopment()
 	if err != nil {

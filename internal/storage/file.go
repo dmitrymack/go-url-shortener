@@ -66,7 +66,7 @@ func (f *FileStorage) Get(key string) (string, error) {
 	return value, nil
 }
 
-func (f *FileStorage) Set(ctx context.Context, key string, value string) (string, error) {
+func (f *FileStorage) Set(ctx context.Context, key string, value string, userID string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if _, ok := f.data[key]; ok {
@@ -86,9 +86,9 @@ func (f *FileStorage) Set(ctx context.Context, key string, value string) (string
 	return key, nil
 }
 
-func (f *FileStorage) SetBatch(ctx context.Context, batchItems []URLRecord) error {
+func (f *FileStorage) SetBatch(ctx context.Context, batchItems []URLRecord, userID string) error {
 	for _, item := range batchItems {
-		if _, err := f.Set(ctx, item.ID, item.OriginURL); err != nil {
+		if _, err := f.Set(ctx, item.ID, item.OriginURL, userID); err != nil {
 			return err
 		}
 	}

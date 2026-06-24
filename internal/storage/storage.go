@@ -29,7 +29,7 @@ func (s *Storage) Get(key string) (string, error) {
 	return value, nil
 }
 
-func (s *Storage) Set(ctx context.Context, key string, value string) (string, error) {
+func (s *Storage) Set(ctx context.Context, key string, value string, userID string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.data[key]; ok {
@@ -40,9 +40,9 @@ func (s *Storage) Set(ctx context.Context, key string, value string) (string, er
 	return key, nil
 }
 
-func (s *Storage) SetBatch(ctx context.Context, batchItems []URLRecord) error {
+func (s *Storage) SetBatch(ctx context.Context, batchItems []URLRecord, userID string) error {
 	for _, item := range batchItems {
-		if _, err := s.Set(ctx, item.ID, item.OriginURL); err != nil {
+		if _, err := s.Set(ctx, item.ID, item.OriginURL, userID); err != nil {
 			return err
 		}
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -66,10 +65,8 @@ func (p *Postgres) Get(key string) (string, error) {
 	return originalURL, nil
 }
 
-func (p *Postgres) Set(ctx context.Context, key string, value string) (string, error) {
+func (p *Postgres) Set(ctx context.Context, key string, value string, userID string) (string, error) {
 	var pgErr *pgconn.PgError
-
-	userID := ctx.Value(contextKeys.UserIDContextKey)
 
 	_, err := p.Pool.Exec(ctx,
 		"INSERT INTO short_urls(short_url_id, original_url, user_id) VALUES($1, $2, $3)",
@@ -100,13 +97,12 @@ func (p *Postgres) Set(ctx context.Context, key string, value string) (string, e
 	return key, nil
 }
 
-func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord) error {
+func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord, userID string) error {
 	tx, err := p.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		return err
 	}
 
-	userID := ctx.Value(contextKeys.UserIDContextKey)
 	for _, item := range batchItems {
 		_, err = tx.Exec(ctx,
 			"INSERT INTO short_urls(short_url_id, original_url, user_id) VALUES($1, $2, $3)",

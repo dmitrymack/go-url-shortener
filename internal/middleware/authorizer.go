@@ -12,7 +12,7 @@ import (
 
 func AuthorizerHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := (*http.Request).Cookie(r, string(contextKeys.UserTokenCookieName))
+		cookie, err := r.Cookie(string(contextKeys.UserTokenCookieName))
 
 		if errors.Is(err, http.ErrNoCookie) {
 			userID := generateUUID(16)
@@ -21,6 +21,7 @@ func AuthorizerHandler(next http.Handler) http.Handler {
 			http.SetCookie(w, &http.Cookie{
 				Name:  string(contextKeys.UserTokenCookieName),
 				Value: token,
+				Path:  "/",
 			})
 
 			ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, userID)
