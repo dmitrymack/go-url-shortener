@@ -1,0 +1,2 @@
+ALTER TABLE short_urls
+    ADD user_id VARCHAR(16) DEFAULT NULL;

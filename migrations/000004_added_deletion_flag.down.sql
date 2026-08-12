@@ -1,0 +1,1 @@
+ALTER TABLE short_urls DROP COLUMN is_deleted;
