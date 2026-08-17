@@ -12,6 +12,8 @@ type Config struct {
 	BaseURL       string
 	StorageFile   string
 	DSN           string
+	AuditFile     string
+	AuditURL      string
 }
 
 func NewConfig() *Config {
@@ -21,6 +23,8 @@ func NewConfig() *Config {
 	flag.StringVar(&cfg.BaseURL, "b", "http://localhost:8080", "Base URL")
 	flag.StringVar(&cfg.StorageFile, "f", "storage.jsonl", "Storage file name")
 	flag.StringVar(&cfg.DSN, "d", "", "Input Database DSN")
+	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Audit log file path")
+	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Audit log remote server URL")
 
 	flag.Parse()
 
@@ -38,6 +42,14 @@ func NewConfig() *Config {
 
 	if envDSN := os.Getenv("DATABASE_DSN"); envDSN != "" {
 		cfg.DSN = envDSN
+	}
+
+	if envAuditFile := os.Getenv("AUDIT_FILE"); envAuditFile != "" {
+		cfg.AuditFile = envAuditFile
+	}
+
+	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
+		cfg.AuditURL = envAuditURL
 	}
 
 	_, err := url.ParseRequestURI(cfg.BaseURL)

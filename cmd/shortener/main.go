@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
 	"github.com/dmitrymack/go-url-shortener.git/internal/config"
 	"github.com/dmitrymack/go-url-shortener.git/internal/handler"
 	"github.com/dmitrymack/go-url-shortener.git/internal/middleware"
@@ -51,8 +52,24 @@ func main() {
 		}
 	}
 
+	auditLog := audit.NewLog()
+
+	if cfg.AuditFile != "" {
+		fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
+		if err != nil {
+			log.Printf("audit file unavailable: %v", err)
+		} else {
+			auditLog.Register(fileObserver)
+			defer fileObserver.Close()
+		}
+	}
+
+	if cfg.AuditURL != "" {
+		auditLog.Register(audit.NewRemoteObserver(cfg.AuditURL))
+	}
+
 	service := shortenService.NewShortenService(store, cfg.BaseURL)
-	h := handler.NewHandler(service, db)
+	h := handler.NewHandler(service, db, auditLog)
 	service.StartDeleteWorker()
 
 	logger, err := zap.NewDevelopment()

@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"log"
 	"net/http"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
 	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
@@ -16,6 +18,7 @@ import (
 type Handler struct {
 	service  *service.ShortenService
 	database storage.Database
+	auditor  audit.Publisher
 }
 
 type RequestObject struct {
@@ -36,11 +39,21 @@ type BatchResponse struct {
 	ShortURL      string `json:"short_url"`
 }
 
-func NewHandler(s *service.ShortenService, db storage.Database) *Handler {
+func NewHandler(s *service.ShortenService, db storage.Database, auditor audit.Publisher) *Handler {
 	return &Handler{
 		service:  s,
 		database: db,
+		auditor:  auditor,
 	}
+}
+
+func (h *Handler) auditEvent(ctx context.Context, action, url string) {
+	if h.auditor == nil {
+		return
+	}
+
+	userID, _ := ctx.Value(contextKeys.UserIDContextKey).(string)
+	h.auditor.Notify(audit.NewEvent(action, userID, url))
 }
 
 func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +75,7 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
 		w.WriteHeader(http.StatusConflict)
 		w.Write([]byte(shortURL))
+		h.auditEvent(r.Context(), audit.ActionShorten, originURL)
 		return
 	}
 
@@ -74,6 +88,7 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusCreated)
 	w.Write([]byte(shortURL))
+	h.auditEvent(r.Context(), audit.ActionShorten, originURL)
 }
 
 func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
@@ -90,6 +105,7 @@ func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Location", value)
 	w.WriteHeader(http.StatusTemporaryRedirect)
+	h.auditEvent(r.Context(), audit.ActionFollow, value)
 }
 
 func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
@@ -131,6 +147,7 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	w.Write(resp)
+	h.auditEvent(r.Context(), audit.ActionShorten, reqObj.URL)
 }
 
 func (h *Handler) PingDatabase(w http.ResponseWriter, r *http.Request) {

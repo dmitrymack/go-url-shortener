@@ -62,7 +62,7 @@ func TestSetShortUrl(t *testing.T) {
 			store := storage.NewStorage()
 			mockDB := &MockDB{}
 			service := shortenService.NewShortenService(store, "http://localhost:8080")
-			h := NewHandler(service, mockDB)
+			h := NewHandler(service, mockDB, nil)
 
 			body := strings.NewReader(tt.body)
 			r := httptest.NewRequest(tt.method, "/", body)
@@ -134,7 +134,7 @@ func TestGetUrlById(t *testing.T) {
 			}
 			mockDB := &MockDB{}
 			service := shortenService.NewShortenService(store, "http://localhost:8080")
-			h := NewHandler(service, mockDB)
+			h := NewHandler(service, mockDB, nil)
 
 			r := httptest.NewRequest(http.MethodGet, "/"+tt.id, nil)
 
@@ -208,7 +208,7 @@ func TestSetShortURLByJSON(t *testing.T) {
 			store := storage.NewStorage()
 			mockDB := &MockDB{}
 			service := shortenService.NewShortenService(store, "http://localhost:8080")
-			h := NewHandler(service, mockDB)
+			h := NewHandler(service, mockDB, nil)
 
 			body := strings.NewReader(tt.body)
 			r := httptest.NewRequest(http.MethodPost, "/api/shorten", body)
