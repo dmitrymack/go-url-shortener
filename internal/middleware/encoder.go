@@ -5,7 +5,14 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 )
+
+var gzipWriterPool = sync.Pool{
+	New: func() any {
+		return gzip.NewWriter(io.Discard)
+	},
+}
 
 type gzipWriter struct {
 	http.ResponseWriter
@@ -21,7 +28,8 @@ func (w *gzipWriter) WriteHeader(statusCode int) {
 
 		w.Header().Set("Content-Encoding", "gzip")
 		w.useGzip = true
-		w.Writer = gzip.NewWriter(w.ResponseWriter)
+		w.Writer = gzipWriterPool.Get().(*gzip.Writer)
+		w.Writer.Reset(w.ResponseWriter)
 	}
 
 	w.ResponseWriter.WriteHeader(statusCode)
@@ -60,6 +68,7 @@ func GzipHandler(next http.Handler) http.Handler {
 		defer func() {
 			if cw.Writer != nil {
 				_ = cw.Writer.Close()
+				gzipWriterPool.Put(cw.Writer)
 			}
 		}()
 

@@ -1,0 +1,63 @@
+package handler
+
+import (
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
+	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
+	"github.com/go-chi/chi/v5"
+)
+
+func BenchmarkSetShortUrl(b *testing.B) {
+	store := storage.NewStorage()
+	service := shortenService.NewShortenService(store, "http://localhost:8080")
+	h := NewHandler(service, &MockDB{}, nil)
+	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "bench_user")
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com/some/long/path")).WithContext(ctx)
+		w := httptest.NewRecorder()
+		h.SetShortUrl(w, r)
+	}
+}
+
+func BenchmarkSetShortUrlByJSON(b *testing.B) {
+	store := storage.NewStorage()
+	service := shortenService.NewShortenService(store, "http://localhost:8080")
+	h := NewHandler(service, &MockDB{}, nil)
+	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "bench_user")
+	body := `{"url":"https://example.com/some/long/path"}`
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(body)).WithContext(ctx)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.SetShortUrlByJSON(w, r)
+	}
+}
+
+func BenchmarkGetUrlById(b *testing.B) {
+	store := storage.NewStorage()
+	service := shortenService.NewShortenService(store, "http://localhost:8080")
+	h := NewHandler(service, &MockDB{}, nil)
+
+	store.Set(context.Background(), "abc12345", "https://example.com/some/long/path", "bench_user")
+
+	routeCtx := chi.NewRouteContext()
+	routeCtx.URLParams.Add("id", "abc12345")
+	ctx := context.WithValue(context.Background(), chi.RouteCtxKey, routeCtx)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := httptest.NewRequest(http.MethodGet, "/abc12345", nil).WithContext(ctx)
+		w := httptest.NewRecorder()
+		h.GetUrlById(w, r)
+	}
+}
