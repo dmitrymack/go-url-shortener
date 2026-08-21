@@ -10,31 +10,43 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// ErrDuplicateOriginalURL is returned when a short link already exists for
+// the original URL being saved. The identifier of the existing link is
+// returned alongside the error.
 var ErrDuplicateOriginalURL = errors.New("duplicate original url")
 
+// Database is the minimal DB connection interface needed by the health
+// check handler (see handler.Handler.PingDatabase).
 type Database interface {
 	Ping(context.Context) error
 	Close(context.Context) error
 }
 
+// URLRecord is a user's short link: an identifier (or a full short URL,
+// depending on context) and the original URL.
 type URLRecord struct {
 	ID        string `json:"short_url"`
 	OriginURL string `json:"original_url"`
 }
 
+// Postgres is a short link store backed by PostgreSQL. It deduplicates
+// links by original URL using a unique index in the database.
 type Postgres struct {
 	Pool *pgxpool.Pool
 }
 
+// Ping checks database availability.
 func (p *Postgres) Ping(ctx context.Context) error {
 	return p.Pool.Ping(ctx)
 }
 
+// Close closes the database connection pool.
 func (p *Postgres) Close(ctx context.Context) error {
 	p.Pool.Close()
 	return nil
 }
 
+// NewPostgres opens a PostgreSQL connection pool using connString.
 func NewPostgres(ctx context.Context, connString string) (*Postgres, error) {
 	pool, err := pgxpool.New(ctx, connString)
 	if err != nil {
@@ -46,6 +58,8 @@ func NewPostgres(ctx context.Context, connString string) (*Postgres, error) {
 	}, nil
 }
 
+// Get returns the original URL stored under the short identifier key. If
+// the link is marked deleted, it returns ErrDeleted.
 func (p *Postgres) Get(key string) (string, error) {
 	var originalURL string
 	var isDeleted bool
@@ -65,6 +79,9 @@ func (p *Postgres) Get(key string) (string, error) {
 	return originalURL, nil
 }
 
+// Set stores value under key. If value was already stored before (unique
+// index violation on original_url), it returns the existing short
+// identifier and ErrDuplicateOriginalURL.
 func (p *Postgres) Set(ctx context.Context, key string, value string, userID string) (string, error) {
 	var pgErr *pgconn.PgError
 
@@ -97,6 +114,7 @@ func (p *Postgres) Set(ctx context.Context, key string, value string, userID str
 	return key, nil
 }
 
+// SetBatch stores all of batchItems in a single transaction.
 func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord, userID string) error {
 	tx, err := p.Pool.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
@@ -117,6 +135,7 @@ func (p *Postgres) SetBatch(ctx context.Context, batchItems []URLRecord, userID 
 	return tx.Commit(ctx)
 }
 
+// GetUrlsByUser returns all non-deleted links belonging to userID.
 func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	rows, err := p.Pool.Query(
 		context.Background(),
@@ -151,6 +170,7 @@ func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	return items, nil
 }
 
+// SetDeletedBatch marks links keys, owned by userID, as deleted.
 func (p *Postgres) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
 	_, err := p.Pool.Exec(
 		ctx,

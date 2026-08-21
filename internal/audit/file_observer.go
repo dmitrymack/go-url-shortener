@@ -7,11 +7,15 @@ import (
 	"sync"
 )
 
+// FileObserver is an audit sink that appends each event as a JSON line to
+// the end of a file on disk.
 type FileObserver struct {
 	file *os.File
 	mu   sync.Mutex
 }
 
+// NewFileObserver opens (creating if necessary) the file at path for
+// appending audit events.
 func NewFileObserver(path string) (*FileObserver, error) {
 	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
@@ -21,10 +25,13 @@ func NewFileObserver(path string) (*FileObserver, error) {
 	return &FileObserver{file: file}, nil
 }
 
+// GetID returns the observer's identifier based on the file path.
 func (f *FileObserver) GetID() string {
 	return "file:" + f.file.Name()
 }
 
+// Update serializes event to JSON and appends it as a new line to the end
+// of the file.
 func (f *FileObserver) Update(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
@@ -41,6 +48,7 @@ func (f *FileObserver) Update(event Event) {
 	}
 }
 
+// Close closes the observer's file.
 func (f *FileObserver) Close() error {
 	return f.file.Close()
 }

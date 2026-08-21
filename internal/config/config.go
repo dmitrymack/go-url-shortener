@@ -1,3 +1,6 @@
+// Package config assembles the URL shortener service configuration from
+// command-line flags and environment variables (environment variables take
+// priority over flags).
 package config
 
 import (
@@ -7,15 +10,25 @@ import (
 	"os"
 )
 
+// Config holds the server startup parameters.
 type Config struct {
+	// ServerAddress is the address the HTTP server listens on (flag -a, env SERVER_ADDRESS).
 	ServerAddress string
-	BaseURL       string
-	StorageFile   string
-	DSN           string
-	AuditFile     string
-	AuditURL      string
+	// BaseURL is the base URL prepended to short identifiers (flag -b, env BASE_URL).
+	BaseURL string
+	// StorageFile is the path to the file store's file (flag -f, env FILE_STORAGE_PATH).
+	StorageFile string
+	// DSN is the PostgreSQL connection string (flag -d, env DATABASE_DSN). An empty string disables the DB.
+	DSN string
+	// AuditFile is the path to the audit file sink (flag --audit-file, env AUDIT_FILE). An empty string disables file auditing.
+	AuditFile string
+	// AuditURL is the URL of the remote audit sink (flag --audit-url, env AUDIT_URL). An empty string disables remote auditing.
+	AuditURL string
 }
 
+// NewConfig parses command-line flags and environment variables and returns
+// the resulting configuration. It terminates the process with an error if
+// BaseURL is not a valid URL.
 func NewConfig() *Config {
 	cfg := &Config{}
 

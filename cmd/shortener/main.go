@@ -1,3 +1,7 @@
+// Command shortener starts the URL shortener HTTP server: applies
+// migrations and sets up the storage backend (PostgreSQL, file-based, or
+// in-memory — in that priority order, depending on availability), audit
+// sinks, and handler routes.
 package main
 
 import (
@@ -101,6 +105,9 @@ func main() {
 	}
 }
 
+// runMigrations applies migrations from the migrations directory to the
+// database identified by the connection string dsn. No pending migrations
+// is not treated as an error.
 func runMigrations(dsn string) error {
 	m, err := migrate.New(
 		"file://migrations",
