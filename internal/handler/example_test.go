@@ -1,4 +1,4 @@
-package handler
+package handler_test
 
 import (
 	"context"
@@ -9,17 +9,19 @@ import (
 	"strings"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/handler"
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 // ExampleHandler_SetShortUrl demonstrates POST / — shortening a URL passed
 // as plain text.
 func ExampleHandler_SetShortUrl() {
 	store := storage.NewStorage()
-	svc := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(svc, nil, nil)
+	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com"))
 	ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "example_user")
@@ -39,8 +41,8 @@ func ExampleHandler_SetShortUrl() {
 // shortening a URL passed as JSON.
 func ExampleHandler_SetShortUrlByJSON() {
 	store := storage.NewStorage()
-	svc := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(svc, nil, nil)
+	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
 	body := strings.NewReader(`{"url":"https://example.com"}`)
 	r := httptest.NewRequest(http.MethodPost, "/api/shorten", body)
@@ -53,7 +55,7 @@ func ExampleHandler_SetShortUrlByJSON() {
 	res := w.Result()
 	defer res.Body.Close()
 
-	var resp ResponseObject
+	var resp handler.ResponseObject
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		fmt.Println(err)
 		return
@@ -69,8 +71,8 @@ func ExampleHandler_SetShortUrlByJSON() {
 func ExampleHandler_GetUrlById() {
 	store := storage.NewStorage()
 	store.Set(context.Background(), "abc12345", "https://example.com", "example_user")
-	svc := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(svc, nil, nil)
+	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
 	routeCtx := chi.NewRouteContext()
 	routeCtx.URLParams.Add("id", "abc12345")
@@ -93,8 +95,8 @@ func ExampleHandler_GetUrlById() {
 // shortening several URLs in a single request.
 func ExampleHandler_SetBatchURL() {
 	store := storage.NewStorage()
-	svc := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(svc, nil, nil)
+	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
 	body := strings.NewReader(`[
 		{"correlation_id":"1","original_url":"https://example.com/one"},
@@ -109,7 +111,7 @@ func ExampleHandler_SetBatchURL() {
 	res := w.Result()
 	defer res.Body.Close()
 
-	var resp []BatchResponse
+	var resp []handler.BatchResponse
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		fmt.Println(err)
 		return
@@ -144,8 +146,8 @@ func (s *exampleUserURLStorage) GetUrlsByUser(userID string) ([]storage.URLRecor
 // short links created by the current user.
 func ExampleHandler_GetUserURLS() {
 	store := &exampleUserURLStorage{Storage: storage.NewStorage()}
-	svc := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(svc, nil, nil)
+	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
 	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "example_user")
 	if _, err := svc.CreateShortURL(ctx, "https://example.com"); err != nil {

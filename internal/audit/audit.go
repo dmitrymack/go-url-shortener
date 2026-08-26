@@ -7,6 +7,8 @@ package audit
 import (
 	"sync"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // Possible values of the Event.Action field.
@@ -49,38 +51,78 @@ type Publisher interface {
 	Notify(event Event)
 }
 
-// Log is the default thread-safe Publisher implementation.
+// eventBufferSize is the number of pending events buffered per observer.
+// Once an observer's buffer is full, Notify drops further events for it
+// instead of waiting for the observer to catch up.
+const eventBufferSize = 100
+
+// observerHandle pairs a registered Observer with the channel and the
+// dedicated goroutine that deliver events to it.
+type observerHandle struct {
+	observer Observer
+	events   chan Event
+}
+
+// Log is the default thread-safe Publisher implementation. Each registered
+// observer gets its own buffered channel and delivery goroutine, so a slow
+// or stuck observer can only fall behind — it cannot block Notify or the
+// other observers.
 type Log struct {
-	observers map[string]Observer
+	observers map[string]*observerHandle
 	mu        sync.RWMutex
+	logger    *zap.SugaredLogger
 }
 
-// NewLog creates an empty Log with no subscribers.
-func NewLog() *Log {
-	return &Log{observers: make(map[string]Observer)}
+// NewLog creates an empty Log with no subscribers. logger is used to report
+// events dropped by Notify.
+func NewLog(logger *zap.Logger) *Log {
+	return &Log{
+		observers: make(map[string]*observerHandle),
+		logger:    logger.Sugar(),
+	}
 }
 
-// Register adds o to the list of subscribers.
+// Register adds o to the list of subscribers and starts the goroutine that
+// delivers events to it.
 func (l *Log) Register(o Observer) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	l.observers[o.GetID()] = o
+
+	h := &observerHandle{observer: o, events: make(chan Event, eventBufferSize)}
+	l.observers[o.GetID()] = h
+
+	go func() {
+		for event := range h.events {
+			o.Update(event)
+		}
+	}()
 }
 
-// Deregister removes o from the list of subscribers.
+// Deregister removes o from the list of subscribers and stops its delivery
+// goroutine.
 func (l *Log) Deregister(o Observer) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	delete(l.observers, o.GetID())
+
+	if h, ok := l.observers[o.GetID()]; ok {
+		delete(l.observers, o.GetID())
+		close(h.events)
+	}
 }
 
-// Notify broadcasts event to all registered observers asynchronously (in a
-// separate goroutine per subscriber).
+// Notify broadcasts event to all registered observers. The send to each
+// observer's channel is non-blocking: if an observer's buffer is full, the
+// event is dropped for that observer and Notify moves on. This keeps a slow
+// observer from adding backpressure to the request path that calls Notify.
 func (l *Log) Notify(event Event) {
 	l.mu.RLock()
 	defer l.mu.RUnlock()
 
-	for _, o := range l.observers {
-		go o.Update(event)
+	for id, h := range l.observers {
+		select {
+		case h.events <- event:
+		default:
+			l.logger.Warnln("audit: observer is falling behind, dropping event", "id", id)
+		}
 	}
 }

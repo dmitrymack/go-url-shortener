@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"log"
 	"net/http"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
@@ -16,6 +15,7 @@ import (
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 // Handler implements the URL shortener HTTP handlers on top of a
@@ -25,6 +25,7 @@ type Handler struct {
 	service  *service.ShortenService
 	database storage.Database
 	auditor  audit.Publisher
+	logger   *zap.SugaredLogger
 }
 
 // RequestObject is the POST /api/shorten request body: the URL to shorten.
@@ -52,13 +53,15 @@ type BatchResponse struct {
 }
 
 // NewHandler creates a Handler backed by the link shortening service s, a
-// database connection db (may be nil if the DB handler isn't used), and an
-// audit event publisher auditor (may be nil if auditing is disabled).
-func NewHandler(s *service.ShortenService, db storage.Database, auditor audit.Publisher) *Handler {
+// database connection db (may be nil if the DB handler isn't used), an
+// audit event publisher auditor (may be nil if auditing is disabled), and a
+// logger used to report internal errors.
+func NewHandler(s *service.ShortenService, db storage.Database, auditor audit.Publisher, logger *zap.Logger) *Handler {
 	return &Handler{
 		service:  s,
 		database: db,
 		auditor:  auditor,
+		logger:   logger.Sugar(),
 	}
 }
 
@@ -101,7 +104,7 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		log.Printf("CreateShortURL error: %v", err)
+		h.logger.Errorln("CreateShortURL error", "error", err)
 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -156,7 +159,7 @@ func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
 		statusCode = http.StatusConflict
 	} else if err != nil {
-		log.Printf("CreateShortURL error: %v", err)
+		h.logger.Errorln("CreateShortURL error", "error", err)
 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return

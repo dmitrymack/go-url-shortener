@@ -26,19 +26,26 @@ import (
 )
 
 func main() {
-	cfg := config.NewConfig()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		// No logger exists yet, so this one failure has nowhere else to go.
+		log.Fatal(err)
+	}
+	defer logger.Sync()
+
+	cfg := config.NewConfig(logger)
 	var store shortenService.URLStorage
 	var fileStorage *storage.FileStorage
 	var db storage.Database
 	var postgres *storage.Postgres
 
-	err := runMigrations(cfg.DSN)
+	err = runMigrations(cfg.DSN)
 	if err != nil {
-		log.Printf("Migration failed: %v", err)
+		logger.Error("migration failed", zap.Error(err))
 	} else {
 		postgres, err = storage.NewPostgres(context.Background(), cfg.DSN)
 		if err != nil {
-			log.Printf("Postgres unavailable: %v", err)
+			logger.Error("postgres unavailable", zap.Error(err))
 		}
 	}
 
@@ -49,7 +56,7 @@ func main() {
 	} else {
 		fileStorage, err = storage.NewFileStorage(cfg.StorageFile)
 		if err != nil {
-			log.Printf("File unavailable: %v", err)
+			logger.Error("file storage unavailable", zap.Error(err))
 			store = storage.NewStorage()
 		} else {
 			store = fileStorage
@@ -57,12 +64,12 @@ func main() {
 		}
 	}
 
-	auditLog := audit.NewLog()
+	auditLog := audit.NewLog(logger)
 
 	if cfg.AuditFile != "" {
-		fileObserver, err := audit.NewFileObserver(cfg.AuditFile)
+		fileObserver, err := audit.NewFileObserver(cfg.AuditFile, logger)
 		if err != nil {
-			log.Printf("audit file unavailable: %v", err)
+			logger.Error("audit file unavailable", zap.Error(err))
 		} else {
 			auditLog.Register(fileObserver)
 			defer fileObserver.Close()
@@ -70,23 +77,17 @@ func main() {
 	}
 
 	if cfg.AuditURL != "" {
-		auditLog.Register(audit.NewRemoteObserver(cfg.AuditURL))
+		auditLog.Register(audit.NewRemoteObserver(cfg.AuditURL, logger))
 	}
 
-	service := shortenService.NewShortenService(store, cfg.BaseURL)
-	h := handler.NewHandler(service, db, auditLog)
+	service := shortenService.NewShortenService(store, cfg.BaseURL, logger)
+	h := handler.NewHandler(service, db, auditLog, logger)
 	service.StartDeleteWorker()
 
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer logger.Sync()
+	startProfilerServer("localhost:6060", logger)
 
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler, middleware.AuthorizerHandler)
-
-	r.Mount("/debug", chimiddleware.Profiler())
 
 	r.Get("/{id}", h.GetUrlById)
 	r.Get("/ping", h.PingDatabase)
@@ -103,6 +104,22 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to start server", zap.Error(err))
 	}
+}
+
+// startProfilerServer starts the pprof debug server on addr in a background
+// goroutine, separate from the public router. addr should be bound to
+// localhost or another interface unreachable from outside the host, since
+// /debug/pprof exposes heap dumps, goroutine traces, and CPU profiles that
+// could otherwise leak the service's internal structure to an attacker.
+func startProfilerServer(addr string, logger *zap.Logger) {
+	profilerRouter := chi.NewRouter()
+	profilerRouter.Mount("/debug", chimiddleware.Profiler())
+
+	go func() {
+		if err := http.ListenAndServe(addr, profilerRouter); err != nil {
+			logger.Error("profiler server failed", zap.Error(err))
+		}
+	}()
 }
 
 // runMigrations applies migrations from the migrations directory to the

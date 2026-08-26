@@ -11,16 +11,16 @@ import (
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
+	"go.uber.org/zap"
 )
 
 func BenchmarkSetShortUrl(b *testing.B) {
 	store := storage.NewStorage()
-	service := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(service, &MockDB{}, nil)
+	service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := NewHandler(service, &MockDB{}, nil, zap.NewNop())
 	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "bench_user")
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com/some/long/path")).WithContext(ctx)
 		w := httptest.NewRecorder()
 		h.SetShortUrl(w, r)
@@ -29,13 +29,12 @@ func BenchmarkSetShortUrl(b *testing.B) {
 
 func BenchmarkSetShortUrlByJSON(b *testing.B) {
 	store := storage.NewStorage()
-	service := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(service, &MockDB{}, nil)
+	service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := NewHandler(service, &MockDB{}, nil, zap.NewNop())
 	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "bench_user")
 	body := `{"url":"https://example.com/some/long/path"}`
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := httptest.NewRequest(http.MethodPost, "/api/shorten", strings.NewReader(body)).WithContext(ctx)
 		r.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -45,8 +44,8 @@ func BenchmarkSetShortUrlByJSON(b *testing.B) {
 
 func BenchmarkGetUrlById(b *testing.B) {
 	store := storage.NewStorage()
-	service := shortenService.NewShortenService(store, "http://localhost:8080")
-	h := NewHandler(service, &MockDB{}, nil)
+	service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+	h := NewHandler(service, &MockDB{}, nil, zap.NewNop())
 
 	store.Set(context.Background(), "abc12345", "https://example.com/some/long/path", "bench_user")
 
@@ -54,8 +53,7 @@ func BenchmarkGetUrlById(b *testing.B) {
 	routeCtx.URLParams.Add("id", "abc12345")
 	ctx := context.WithValue(context.Background(), chi.RouteCtxKey, routeCtx)
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		r := httptest.NewRequest(http.MethodGet, "/abc12345", nil).WithContext(ctx)
 		w := httptest.NewRecorder()
 		h.GetUrlById(w, r)

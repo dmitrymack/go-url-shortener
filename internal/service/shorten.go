@@ -6,12 +6,12 @@ package service
 import (
 	"context"
 	"errors"
-	"log"
 	"math/rand"
 	"net/url"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
+	"go.uber.org/zap"
 )
 
 // URLStorage is the storage interface used by ShortenService. It is
@@ -39,15 +39,18 @@ type ShortenService struct {
 	storage     URLStorage
 	baseURL     string
 	deleteQueue chan DeleteTask
+	logger      *zap.SugaredLogger
 }
 
 // NewShortenService creates a ShortenService over storage s. baseURL is the
 // prefix prepended to a generated identifier when forming a short link.
-func NewShortenService(s URLStorage, baseURL string) *ShortenService {
+// logger is used by StartDeleteWorker to report deletion errors.
+func NewShortenService(s URLStorage, baseURL string, logger *zap.Logger) *ShortenService {
 	return &ShortenService{
 		storage:     s,
 		baseURL:     baseURL,
 		deleteQueue: make(chan DeleteTask, 100),
+		logger:      logger.Sugar(),
 	}
 }
 
@@ -160,7 +163,7 @@ func (s *ShortenService) StartDeleteWorker() {
 	go func() {
 		for task := range s.deleteQueue {
 			if err := s.storage.SetDeletedBatch(context.Background(), task.IDs, task.UserID); err != nil {
-				log.Println(err)
+				s.logger.Errorln("delete batch failed", "error", err)
 			}
 		}
 	}()

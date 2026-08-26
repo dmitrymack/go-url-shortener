@@ -5,9 +5,10 @@ package config
 
 import (
 	"flag"
-	"log"
 	"net/url"
 	"os"
+
+	"go.uber.org/zap"
 )
 
 // Config holds the server startup parameters.
@@ -27,9 +28,9 @@ type Config struct {
 }
 
 // NewConfig parses command-line flags and environment variables and returns
-// the resulting configuration. It terminates the process with an error if
-// BaseURL is not a valid URL.
-func NewConfig() *Config {
+// the resulting configuration. It terminates the process with an error,
+// logged via logger, if BaseURL is not a valid URL.
+func NewConfig(logger *zap.Logger) *Config {
 	cfg := &Config{}
 
 	flag.StringVar(&cfg.ServerAddress, "a", "localhost:8080", "Input host and port of server")
@@ -67,7 +68,7 @@ func NewConfig() *Config {
 
 	_, err := url.ParseRequestURI(cfg.BaseURL)
 	if err != nil {
-		log.Fatal("invalid base URL:", err)
+		logger.Fatal("invalid base URL", zap.Error(err))
 	}
 
 	return cfg

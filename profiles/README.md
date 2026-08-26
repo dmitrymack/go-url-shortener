@@ -1,3 +1,20 @@
+## Analysis
+
+`base.pprof` was captured before the optimization, `result.pprof` after, both under the same load (see `-seconds` in the profile-capture command). Negative numbers in the diff profile are what stopped being allocated after the change.
+
+What was the bottleneck (from `alloc_space`/`alloc_objects` in `base.pprof`, before the optimization):
+- **`compress/flate.NewWriter`** — almost all allocated memory (`alloc_space`). `middleware.GzipHandler` created a new `gzip.Writer` via `gzip.NewWriter(w)` on every request, and internally that allocates fresh Huffman tables and compressor buffers (`compress/flate.(*compressor).initDeflate`) on every call.
+- **`go.uber.org/zap.(*Logger).Sugar`** and **`(*Logger).clone`** — a noticeable share of `alloc_objects`. `middleware.LoggingHandler` called `logger.Sugar()` inside the handler on every request, even though `Sugar()` clones and wraps the logger each time it's called.
+
+What changed in the code:
+1. `internal/middleware/encoder.go` — added `gzipWriterPool = sync.Pool{New: func() any { return gzip.NewWriter(io.Discard) }}`. `gzipWriter.WriteHeader` now takes a `*gzip.Writer` from the pool and reinitializes it via `Reset(w.ResponseWriter)` instead of `gzip.NewWriter(w.ResponseWriter)`; after the response, the writer is returned to the pool (`gzipWriterPool.Put`). The compressor's buffers and Huffman tables are reused across requests instead of being recreated.
+2. `internal/middleware/logger.go` — moved `sugar := logger.Sugar()` out of the per-request handler closure into `LoggingHandler`'s body, which runs once at server startup instead of once per request.
+
+How this shows up in the diff profiles below:
+- In `alloc_space` (second block), `compress/flate.NewWriter` and `compress/flate.(*compressor).initDeflate` together account for `-162487.77MB` out of the `-163951.41MB` shown for all nodes — nearly the entire effect, and a direct consequence of change 1: the writer is no longer recreated on every request.
+- In `alloc_objects` (third block), the disappearance of `go.uber.org/zap.(*Logger).Sugar` (`-720901`) and `(*Logger).clone` (`-430132`) is a direct consequence of change 2. The rest of that block (`compress/flate.newHuffmanEncoder`, `newHuffmanBitWriter`, etc.) is the same effect from change 1, just counted in objects instead of bytes.
+- In `inuse_space` (first block) the picture is different: the top entries are `encoding/json` and `storage.(*FileStorage).Set` — functions the change didn't touch. After the optimization the service processes requests faster and puts less pressure on the GC, so at the moment the snapshot was taken there was less "in-flight" state in memory (bodies being decoded, lines not yet written to the file) — a side effect of the speedup, not a result of directly changing those functions.
+
 ```
 $ go tool pprof -top -diff_base=profiles/base.pprof profiles/result.pprof
 File: shortener

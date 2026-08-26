@@ -3,9 +3,11 @@ package audit
 import (
 	"bytes"
 	"encoding/json"
-	"log"
+	"io"
 	"net/http"
 	"time"
+
+	"go.uber.org/zap"
 )
 
 // RemoteObserver is an audit sink that sends each event as a POST request
@@ -13,13 +15,16 @@ import (
 type RemoteObserver struct {
 	url    string
 	client *http.Client
+	logger *zap.SugaredLogger
 }
 
-// NewRemoteObserver creates an observer that sends events to url.
-func NewRemoteObserver(url string) *RemoteObserver {
+// NewRemoteObserver creates an observer that sends events to url. logger is
+// used to report request errors, since Update itself cannot return them.
+func NewRemoteObserver(url string, logger *zap.Logger) *RemoteObserver {
 	return &RemoteObserver{
 		url:    url,
 		client: &http.Client{Timeout: 5 * time.Second},
+		logger: logger.Sugar(),
 	}
 }
 
@@ -33,14 +38,16 @@ func (r *RemoteObserver) GetID() string {
 func (r *RemoteObserver) Update(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		log.Println(err)
+		r.logger.Errorln("audit: failed to marshal event", "error", err)
 		return
 	}
 
 	resp, err := r.client.Post(r.url, "application/json", bytes.NewReader(data))
 	if err != nil {
-		log.Println(err)
+		r.logger.Errorln("audit: failed to send event", "error", err)
 		return
 	}
 	defer resp.Body.Close()
+
+	io.Copy(io.Discard, resp.Body)
 }
