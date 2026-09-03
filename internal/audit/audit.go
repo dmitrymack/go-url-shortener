@@ -4,6 +4,8 @@
 // RemoteObserver.
 package audit
 
+//go:generate go run github.com/dmitrymack/go-url-shortener.git/cmd/reset github.com/dmitrymack/go-url-shortener.git/...
+
 import (
 	"sync"
 	"time"
@@ -20,6 +22,8 @@ const (
 )
 
 // Event is a single audit event.
+//
+// generate:reset
 type Event struct {
 	Timestamp int64  `json:"ts"`
 	Action    string `json:"action"`

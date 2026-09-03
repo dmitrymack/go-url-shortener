@@ -3,6 +3,8 @@
 // the current user's links.
 package handler
 
+//go:generate go run github.com/dmitrymack/go-url-shortener.git/cmd/reset github.com/dmitrymack/go-url-shortener.git/...
+
 import (
 	"context"
 	"encoding/json"
@@ -29,11 +31,15 @@ type Handler struct {
 }
 
 // RequestObject is the POST /api/shorten request body: the URL to shorten.
+//
+// generate:reset
 type RequestObject struct {
 	URL string `json:"url"`
 }
 
 // ResponseObject is the POST /api/shorten response body: the resulting short URL.
+//
+// generate:reset
 type ResponseObject struct {
 	Result string `json:"result"`
 }
@@ -41,12 +47,16 @@ type ResponseObject struct {
 // BatchRequest is a single item of the POST /api/shorten/batch request: an
 // original URL with a correlation ID the client uses to match it against
 // the response.
+//
+// generate:reset
 type BatchRequest struct {
 	CorrelationID string `json:"correlation_id"`
 	OriginalURL   string `json:"original_url"`
 }
 
 // BatchResponse is a single item of the batch shortening response.
+//
+// generate:reset
 type BatchResponse struct {
 	CorrelationID string `json:"correlation_id"`
 	ShortURL      string `json:"short_url"`

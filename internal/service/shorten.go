@@ -3,6 +3,8 @@
 // asynchronous deletion of a user's links.
 package service
 
+//go:generate go run github.com/dmitrymack/go-url-shortener.git/cmd/reset github.com/dmitrymack/go-url-shortener.git/...
+
 import (
 	"context"
 	"errors"
@@ -28,6 +30,8 @@ type URLStorage interface {
 
 // DeleteTask is a job for asynchronously deleting a user's links, submitted
 // to the queue via ShortenService.EnqueueDelete.
+//
+// generate:reset
 type DeleteTask struct {
 	UserID string
 	IDs    []string
