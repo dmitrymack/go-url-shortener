@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -23,7 +23,7 @@ func (db *MockDB) Ping(ctx context.Context) error { return nil }
 
 func (db *MockDB) Close(ctx context.Context) error { return nil }
 
-func TestSetShortUrl(t *testing.T) {
+func TestSetShortURL(t *testing.T) {
 	type want struct {
 		statusCode int
 		shortURL   string
@@ -70,8 +70,8 @@ func TestSetShortUrl(t *testing.T) {
 			r.Host = tt.host
 
 			w := httptest.NewRecorder()
-			ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "test_set_user")
-			h.SetShortUrl(w, r.WithContext(ctx))
+			ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, "test_set_user")
+			h.SetShortURL(w, r.WithContext(ctx))
 
 			res := w.Result()
 			defer res.Body.Close()
@@ -95,7 +95,7 @@ func TestSetShortUrl(t *testing.T) {
 	}
 }
 
-func TestGetUrlById(t *testing.T) {
+func TestGetURLByID(t *testing.T) {
 	type want struct {
 		statusCode int
 		originURL  string
@@ -148,7 +148,7 @@ func TestGetUrlById(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
-			h.GetUrlById(w, r)
+			h.GetURLByID(w, r)
 
 			res := w.Result()
 			defer res.Body.Close()
@@ -218,8 +218,8 @@ func TestSetShortURLByJSON(t *testing.T) {
 
 			w := httptest.NewRecorder()
 
-			ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "test_set_json_user")
-			h.SetShortUrlByJSON(w, r.WithContext(ctx))
+			ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, "test_set_json_user")
+			h.SetShortURLByJSON(w, r.WithContext(ctx))
 
 			res := w.Result()
 			defer res.Body.Close()

@@ -11,7 +11,7 @@ import (
 	"net/http"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
@@ -72,15 +72,15 @@ func (h *Handler) auditEvent(ctx context.Context, action, url string) {
 		return
 	}
 
-	userID, _ := ctx.Value(contextKeys.UserIDContextKey).(string)
+	userID, _ := ctx.Value(contextkeys.UserIDContextKey).(string)
 	h.auditor.Notify(audit.NewEvent(action, userID, url))
 }
 
-// SetShortUrl handles POST /. It accepts the original URL as plain text in
+// SetShortURL handles POST /. It accepts the original URL as plain text in
 // the request body and returns the short URL as plain text with status 201.
 // If the URL was already shortened before, it returns the existing short
 // link with status 409.
-func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SetShortURL(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
@@ -115,10 +115,10 @@ func (h *Handler) SetShortUrl(w http.ResponseWriter, r *http.Request) {
 	h.auditEvent(r.Context(), audit.ActionShorten, originURL)
 }
 
-// GetUrlById handles GET /{id}. It looks up the original URL by the short
+// GetURLByID handles GET /{id}. It looks up the original URL by the short
 // identifier id and returns a temporary redirect (307) to it. If the link
 // was deleted, it returns status 410; if not found, status 400.
-func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) GetURLByID(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	value, err := h.service.GetOriginalURL(id)
 	if errors.Is(err, storage.ErrDeleted) {
@@ -135,11 +135,11 @@ func (h *Handler) GetUrlById(w http.ResponseWriter, r *http.Request) {
 	h.auditEvent(r.Context(), audit.ActionFollow, value)
 }
 
-// SetShortUrlByJSON handles POST /api/shorten. It accepts the original URL
+// SetShortURLByJSON handles POST /api/shorten. It accepts the original URL
 // as JSON (RequestObject) and returns the short URL as JSON too
 // (ResponseObject) with status 201. If the URL was already shortened before,
 // it returns the existing short link with status 409.
-func (h *Handler) SetShortUrlByJSON(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SetShortURLByJSON(w http.ResponseWriter, r *http.Request) {
 	var reqObj RequestObject
 
 	defer r.Body.Close()
@@ -228,7 +228,7 @@ func (h *Handler) SetBatchURL(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	respJson, err := json.Marshal(resp)
+	respJSON, err := json.Marshal(resp)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -236,15 +236,15 @@ func (h *Handler) SetBatchURL(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	w.Write(respJson)
+	w.Write(respJSON)
 }
 
 // GetUserURLS handles GET /api/user/urls. It returns all short links created
 // by the current user (identified via the authorization cookie). If there
 // are no links, it returns status 204.
 func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
-	userId := r.Context().Value(contextKeys.UserIDContextKey).(string)
-	userUrls, err := h.service.GetUrlsByUser(userId)
+	userID := r.Context().Value(contextkeys.UserIDContextKey).(string)
+	userUrls, err := h.service.GetUrlsByUser(userID)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -255,7 +255,7 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respJson, err := json.Marshal(userUrls)
+	respJSON, err := json.Marshal(userUrls)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -263,7 +263,7 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write(respJson)
+	w.Write(respJSON)
 }
 
 // DeleteUserUrls handles DELETE /api/user/urls. It accepts a list of short
@@ -272,7 +272,7 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 // 202 without waiting for the deletion to actually happen.
 func (h *Handler) DeleteUserUrls(w http.ResponseWriter, r *http.Request) {
 	var ids []string
-	userID := r.Context().Value(contextKeys.UserIDContextKey).(string)
+	userID := r.Context().Value(contextkeys.UserIDContextKey).(string)
 
 	err := json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {

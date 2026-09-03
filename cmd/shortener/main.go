@@ -89,12 +89,12 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler, middleware.AuthorizerHandler)
 
-	r.Get("/{id}", h.GetUrlById)
+	r.Get("/{id}", h.GetURLByID)
 	r.Get("/ping", h.PingDatabase)
 	r.Get("/api/user/urls", h.GetUserURLS)
 
-	r.Post("/", h.SetShortUrl)
-	r.Post("/api/shorten", h.SetShortUrlByJSON)
+	r.Post("/", h.SetShortURL)
+	r.Post("/api/shorten", h.SetShortURLByJSON)
 	r.Post("/api/shorten/batch", h.SetBatchURL)
 
 	r.Delete("/api/user/urls", h.DeleteUserUrls)
