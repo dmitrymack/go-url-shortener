@@ -1,3 +1,7 @@
+// Command shortener starts the URL shortener HTTP server: applies
+// migrations and sets up the storage backend (PostgreSQL, file-based, or
+// in-memory — in that priority order, depending on availability), audit
+// sinks, and handler routes.
 package main
 
 import (
@@ -6,12 +10,14 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
 	"github.com/dmitrymack/go-url-shortener.git/internal/config"
 	"github.com/dmitrymack/go-url-shortener.git/internal/handler"
 	"github.com/dmitrymack/go-url-shortener.git/internal/middleware"
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"github.com/go-chi/chi/v5"
+	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
@@ -20,19 +26,26 @@ import (
 )
 
 func main() {
-	cfg := config.NewConfig()
+	logger, err := zap.NewDevelopment()
+	if err != nil {
+		// No logger exists yet, so this one failure has nowhere else to go.
+		log.Fatal(err)
+	}
+	defer logger.Sync()
+
+	cfg := config.NewConfig(logger)
 	var store shortenService.URLStorage
 	var fileStorage *storage.FileStorage
 	var db storage.Database
 	var postgres *storage.Postgres
 
-	err := runMigrations(cfg.DSN)
+	err = runMigrations(cfg.DSN)
 	if err != nil {
-		log.Printf("Migration failed: %v", err)
+		logger.Error("migration failed", zap.Error(err))
 	} else {
 		postgres, err = storage.NewPostgres(context.Background(), cfg.DSN)
 		if err != nil {
-			log.Printf("Postgres unavailable: %v", err)
+			logger.Error("postgres unavailable", zap.Error(err))
 		}
 	}
 
@@ -43,7 +56,7 @@ func main() {
 	} else {
 		fileStorage, err = storage.NewFileStorage(cfg.StorageFile)
 		if err != nil {
-			log.Printf("File unavailable: %v", err)
+			logger.Error("file storage unavailable", zap.Error(err))
 			store = storage.NewStorage()
 		} else {
 			store = fileStorage
@@ -51,15 +64,27 @@ func main() {
 		}
 	}
 
-	service := shortenService.NewShortenService(store, cfg.BaseURL)
-	h := handler.NewHandler(service, db)
+	auditLog := audit.NewLog(logger)
+
+	if cfg.AuditFile != "" {
+		fileObserver, err := audit.NewFileObserver(cfg.AuditFile, logger)
+		if err != nil {
+			logger.Error("audit file unavailable", zap.Error(err))
+		} else {
+			auditLog.Register(fileObserver)
+			defer fileObserver.Close()
+		}
+	}
+
+	if cfg.AuditURL != "" {
+		auditLog.Register(audit.NewRemoteObserver(cfg.AuditURL, logger))
+	}
+
+	service := shortenService.NewShortenService(store, cfg.BaseURL, logger)
+	h := handler.NewHandler(service, db, auditLog, logger)
 	service.StartDeleteWorker()
 
-	logger, err := zap.NewDevelopment()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer logger.Sync()
+	startProfilerServer("localhost:6060", logger)
 
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler, middleware.AuthorizerHandler)
@@ -81,6 +106,25 @@ func main() {
 	}
 }
 
+// startProfilerServer starts the pprof debug server on addr in a background
+// goroutine, separate from the public router. addr should be bound to
+// localhost or another interface unreachable from outside the host, since
+// /debug/pprof exposes heap dumps, goroutine traces, and CPU profiles that
+// could otherwise leak the service's internal structure to an attacker.
+func startProfilerServer(addr string, logger *zap.Logger) {
+	profilerRouter := chi.NewRouter()
+	profilerRouter.Mount("/debug", chimiddleware.Profiler())
+
+	go func() {
+		if err := http.ListenAndServe(addr, profilerRouter); err != nil {
+			logger.Error("profiler server failed", zap.Error(err))
+		}
+	}()
+}
+
+// runMigrations applies migrations from the migrations directory to the
+// database identified by the connection string dsn. No pending migrations
+// is not treated as an error.
 func runMigrations(dsn string) error {
 	m, err := migrate.New(
 		"file://migrations",

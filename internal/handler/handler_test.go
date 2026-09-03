@@ -14,6 +14,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 type MockDB struct{}
@@ -61,8 +62,8 @@ func TestSetShortUrl(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewStorage()
 			mockDB := &MockDB{}
-			service := shortenService.NewShortenService(store, "http://localhost:8080")
-			h := NewHandler(service, mockDB)
+			service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+			h := NewHandler(service, mockDB, nil, zap.NewNop())
 
 			body := strings.NewReader(tt.body)
 			r := httptest.NewRequest(tt.method, "/", body)
@@ -133,8 +134,8 @@ func TestGetUrlById(t *testing.T) {
 				store.Set(context.Background(), tt.id, tt.want.originURL, tt.userID)
 			}
 			mockDB := &MockDB{}
-			service := shortenService.NewShortenService(store, "http://localhost:8080")
-			h := NewHandler(service, mockDB)
+			service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+			h := NewHandler(service, mockDB, nil, zap.NewNop())
 
 			r := httptest.NewRequest(http.MethodGet, "/"+tt.id, nil)
 
@@ -207,8 +208,8 @@ func TestSetShortURLByJSON(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			store := storage.NewStorage()
 			mockDB := &MockDB{}
-			service := shortenService.NewShortenService(store, "http://localhost:8080")
-			h := NewHandler(service, mockDB)
+			service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+			h := NewHandler(service, mockDB, nil, zap.NewNop())
 
 			body := strings.NewReader(tt.body)
 			r := httptest.NewRequest(http.MethodPost, "/api/shorten", body)
