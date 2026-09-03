@@ -1,6 +1,6 @@
-// Package contextKeys contains typed keys for the request context and
+// Package contextkeys contains typed keys for the request context and
 // cookies shared across the service's middleware and handlers.
-package contextKeys
+package contextkeys
 
 // ContextKey is the type of context keys used by the package, to avoid
 // collisions with keys from other packages.
