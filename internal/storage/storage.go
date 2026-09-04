@@ -2,6 +2,8 @@
 // in-memory (Storage), file-based (FileStorage), and PostgreSQL (Postgres).
 package storage
 
+//go:generate go run github.com/dmitrymack/go-url-shortener.git/cmd/reset github.com/dmitrymack/go-url-shortener.git/...
+
 import (
 	"context"
 	"errors"

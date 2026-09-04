@@ -10,6 +10,10 @@ import (
 
 // Claims is the payload of the authorization JWT: standard JWT fields plus
 // the user identifier.
+//
+// generate:reset
+// Note: the embedded jwt.RegisteredClaims has no Reset() method of its
+// own, so the generated Reset() only clears UserID.
 type Claims struct {
 	jwt.RegisteredClaims
 	UserID string
