@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -25,7 +26,20 @@ import (
 	"go.uber.org/zap"
 )
 
+// Build metadata, set at compile time via:
+//
+//	go build -ldflags "-X main.buildVersion=... -X main.buildDate=... -X main.buildCommit=..."
+//
+// Left empty (printed as "N/A") for a plain go build.
+var (
+	buildVersion string
+	buildDate    string
+	buildCommit  string
+)
+
 func main() {
+	printBuildInfo()
+
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		// No logger exists yet, so this one failure has nowhere else to go.
@@ -104,6 +118,23 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to start server", zap.Error(err))
 	}
+}
+
+// printBuildInfo prints the buildVersion/buildDate/buildCommit values (set
+// at compile time via -ldflags -X) to stdout, substituting "N/A" for
+// whichever were left unset.
+func printBuildInfo() {
+	fmt.Printf("Build version: %s\n", orNA(buildVersion))
+	fmt.Printf("Build date: %s\n", orNA(buildDate))
+	fmt.Printf("Build commit: %s\n", orNA(buildCommit))
+}
+
+// orNA returns s, or "N/A" if s is empty.
+func orNA(s string) string {
+	if s == "" {
+		return "N/A"
+	}
+	return s
 }
 
 // startProfilerServer starts the pprof debug server on addr in a background
