@@ -17,9 +17,13 @@ import (
 	"go.uber.org/zap"
 )
 
-type MockDB struct{}
+// MockDB is a storage.Database test double. The zero value always succeeds;
+// set PingErr to make Ping fail.
+type MockDB struct {
+	PingErr error
+}
 
-func (db *MockDB) Ping(ctx context.Context) error { return nil }
+func (db *MockDB) Ping(ctx context.Context) error { return db.PingErr }
 
 func (db *MockDB) Close(ctx context.Context) error { return nil }
 
