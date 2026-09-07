@@ -30,11 +30,12 @@ import (
 //
 //	go build -ldflags "-X main.buildVersion=... -X main.buildDate=... -X main.buildCommit=..."
 //
-// Left empty (printed as "N/A") for a plain go build.
+// Defaults to "N/A" so the value is meaningful on its own (e.g. in a
+// debugger or a log line) for a plain go build, with no unset value.
 var (
-	buildVersion string
-	buildDate    string
-	buildCommit  string
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
 )
 
 func main() {
@@ -121,20 +122,11 @@ func main() {
 }
 
 // printBuildInfo prints the buildVersion/buildDate/buildCommit values (set
-// at compile time via -ldflags -X) to stdout, substituting "N/A" for
-// whichever were left unset.
+// at compile time via -ldflags -X) to stdout.
 func printBuildInfo() {
-	fmt.Printf("Build version: %s\n", orNA(buildVersion))
-	fmt.Printf("Build date: %s\n", orNA(buildDate))
-	fmt.Printf("Build commit: %s\n", orNA(buildCommit))
-}
-
-// orNA returns s, or "N/A" if s is empty.
-func orNA(s string) string {
-	if s == "" {
-		return "N/A"
-	}
-	return s
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
 }
 
 // startProfilerServer starts the pprof debug server on addr in a background

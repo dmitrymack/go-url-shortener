@@ -47,6 +47,15 @@ func TestPool_PutResetsBeforeReuse(t *testing.T) {
 	}
 }
 
+func TestPool_NilNewFunc_GetReturnsZeroValue(t *testing.T) {
+	p := New[*item](nil)
+
+	v := p.Get()
+	if v != nil {
+		t.Fatalf("Get() = %v, want nil (the zero value of *item)", v)
+	}
+}
+
 func TestPool_PutMakesValueReusable(t *testing.T) {
 	created := 0
 	p := New(func() *item {

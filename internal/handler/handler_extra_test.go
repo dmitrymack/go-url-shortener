@@ -201,7 +201,8 @@ func TestDeleteUserUrls(t *testing.T) {
 			assert.Equal(t, "delete_user", got.userID)
 			assert.Equal(t, []string{"abc123", "def456"}, got.keys)
 		case <-time.After(time.Second):
-			t.Fatal("delete worker did not process the enqueued task in time")
+			t.Errorf("delete worker did not process the enqueued task in time")
+			return
 		}
 	})
 }

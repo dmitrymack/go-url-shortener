@@ -55,7 +55,7 @@ func generate(dir string, patterns []string) error {
 	resettable := resettableSet(byPkg)
 
 	for pkg, names := range byPkg {
-		methods := make([]string, 0, len(names))
+		methods := make([]methodData, 0, len(names))
 		for _, name := range names {
 			obj := pkg.Types.Scope().Lookup(name)
 			structType := obj.Type().(*types.Named).Underlying().(*types.Struct)

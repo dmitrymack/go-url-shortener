@@ -20,11 +20,17 @@ type Pool[T Resettable] struct {
 }
 
 // New creates a Pool whose Get() calls newFunc to produce a new value
-// whenever the pool has none to reuse.
+// whenever the pool has none to reuse. A nil newFunc is allowed, mirroring
+// sync.Pool itself: Get() then returns the zero value of T instead of
+// panicking.
 func New[T Resettable](newFunc func() T) *Pool[T] {
 	return &Pool[T]{
 		pool: sync.Pool{
 			New: func() any {
+				if newFunc == nil {
+					var zero T
+					return zero
+				}
 				return newFunc()
 			},
 		},
