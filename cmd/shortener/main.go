@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -25,7 +26,21 @@ import (
 	"go.uber.org/zap"
 )
 
+// Build metadata, set at compile time via:
+//
+//	go build -ldflags "-X main.buildVersion=... -X main.buildDate=... -X main.buildCommit=..."
+//
+// Defaults to "N/A" so the value is meaningful on its own (e.g. in a
+// debugger or a log line) for a plain go build, with no unset value.
+var (
+	buildVersion = "N/A"
+	buildDate    = "N/A"
+	buildCommit  = "N/A"
+)
+
 func main() {
+	printBuildInfo()
+
 	logger, err := zap.NewDevelopment()
 	if err != nil {
 		// No logger exists yet, so this one failure has nowhere else to go.
@@ -89,12 +104,12 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler, middleware.AuthorizerHandler)
 
-	r.Get("/{id}", h.GetUrlById)
+	r.Get("/{id}", h.GetURLByID)
 	r.Get("/ping", h.PingDatabase)
 	r.Get("/api/user/urls", h.GetUserURLS)
 
-	r.Post("/", h.SetShortUrl)
-	r.Post("/api/shorten", h.SetShortUrlByJSON)
+	r.Post("/", h.SetShortURL)
+	r.Post("/api/shorten", h.SetShortURLByJSON)
 	r.Post("/api/shorten/batch", h.SetBatchURL)
 
 	r.Delete("/api/user/urls", h.DeleteUserUrls)
@@ -104,6 +119,14 @@ func main() {
 	if err != nil {
 		logger.Fatal("failed to start server", zap.Error(err))
 	}
+}
+
+// printBuildInfo prints the buildVersion/buildDate/buildCommit values (set
+// at compile time via -ldflags -X) to stdout.
+func printBuildInfo() {
+	fmt.Printf("Build version: %s\n", buildVersion)
+	fmt.Printf("Build date: %s\n", buildDate)
+	fmt.Printf("Build commit: %s\n", buildCommit)
 }
 
 // startProfilerServer starts the pprof debug server on addr in a background

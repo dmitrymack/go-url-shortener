@@ -31,6 +31,14 @@ git fetch template && git checkout template/v2 .github
 
 Подробнее про локальный и автоматический запуск читайте в [README автотестов](https://github.com/Yandex-Practicum/go-autotests).
 
+## Сборка
+
+При старте сервис выводит в stdout версию, дату и коммит сборки. Эти значения задаются флагом линковщика `-X` — если не заданы, выводится `N/A`:
+
+```
+go build -ldflags "-X main.buildVersion=v1.0.0 -X main.buildDate=$(date +'%Y-%m-%d') -X main.buildCommit=$(git rev-parse HEAD)" -o shortener ./cmd/shortener
+```
+
 ## Структура проекта
 
 Приведённая в этом репозитории структура проекта является рекомендуемой, но не обязательной.
