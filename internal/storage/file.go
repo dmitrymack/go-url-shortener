@@ -21,6 +21,8 @@ type FileStorage struct {
 
 // Event is a single line of the FileStorage backing file: a short/original
 // URL pair.
+//
+// generate:reset
 type Event struct {
 	ShortURL    string `json:"short_url"`
 	OriginalURL string `json:"original_url"`

@@ -8,7 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/handler"
 	shortenService "github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
@@ -16,18 +16,18 @@ import (
 	"go.uber.org/zap"
 )
 
-// ExampleHandler_SetShortUrl demonstrates POST / — shortening a URL passed
+// ExampleHandler_SetShortURL demonstrates POST / — shortening a URL passed
 // as plain text.
-func ExampleHandler_SetShortUrl() {
+func ExampleHandler_SetShortURL() {
 	store := storage.NewStorage()
 	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
 	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
 	r := httptest.NewRequest(http.MethodPost, "/", strings.NewReader("https://example.com"))
-	ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "example_user")
+	ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, "example_user")
 	w := httptest.NewRecorder()
 
-	h.SetShortUrl(w, r.WithContext(ctx))
+	h.SetShortURL(w, r.WithContext(ctx))
 
 	res := w.Result()
 	defer res.Body.Close()
@@ -37,9 +37,9 @@ func ExampleHandler_SetShortUrl() {
 	// 201
 }
 
-// ExampleHandler_SetShortUrlByJSON demonstrates POST /api/shorten —
+// ExampleHandler_SetShortURLByJSON demonstrates POST /api/shorten —
 // shortening a URL passed as JSON.
-func ExampleHandler_SetShortUrlByJSON() {
+func ExampleHandler_SetShortURLByJSON() {
 	store := storage.NewStorage()
 	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
 	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
@@ -47,10 +47,10 @@ func ExampleHandler_SetShortUrlByJSON() {
 	body := strings.NewReader(`{"url":"https://example.com"}`)
 	r := httptest.NewRequest(http.MethodPost, "/api/shorten", body)
 	r.Header.Set("Content-Type", "application/json")
-	ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "example_user")
+	ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, "example_user")
 	w := httptest.NewRecorder()
 
-	h.SetShortUrlByJSON(w, r.WithContext(ctx))
+	h.SetShortURLByJSON(w, r.WithContext(ctx))
 
 	res := w.Result()
 	defer res.Body.Close()
@@ -66,9 +66,9 @@ func ExampleHandler_SetShortUrlByJSON() {
 	// 201 true
 }
 
-// ExampleHandler_GetUrlById demonstrates GET /{id} — following a short link
+// ExampleHandler_GetURLByID demonstrates GET /{id} — following a short link
 // and getting a redirect to the original URL.
-func ExampleHandler_GetUrlById() {
+func ExampleHandler_GetURLByID() {
 	store := storage.NewStorage()
 	store.Set(context.Background(), "abc12345", "https://example.com", "example_user")
 	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
@@ -81,7 +81,7 @@ func ExampleHandler_GetUrlById() {
 	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, routeCtx)
 	w := httptest.NewRecorder()
 
-	h.GetUrlById(w, r.WithContext(ctx))
+	h.GetURLByID(w, r.WithContext(ctx))
 
 	res := w.Result()
 	defer res.Body.Close()
@@ -103,7 +103,7 @@ func ExampleHandler_SetBatchURL() {
 		{"correlation_id":"2","original_url":"https://example.com/two"}
 	]`)
 	r := httptest.NewRequest(http.MethodPost, "/api/shorten/batch", body)
-	ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, "example_user")
+	ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, "example_user")
 	w := httptest.NewRecorder()
 
 	h.SetBatchURL(w, r.WithContext(ctx))
@@ -149,7 +149,7 @@ func ExampleHandler_GetUserURLS() {
 	svc := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
 	h := handler.NewHandler(svc, nil, nil, zap.NewNop())
 
-	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "example_user")
+	ctx := context.WithValue(context.Background(), contextkeys.UserIDContextKey, "example_user")
 	if _, err := svc.CreateShortURL(ctx, "https://example.com"); err != nil {
 		fmt.Println(err)
 		return

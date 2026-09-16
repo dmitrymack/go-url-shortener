@@ -3,13 +3,15 @@
 // asynchronous deletion of a user's links.
 package service
 
+//go:generate go run github.com/dmitrymack/go-url-shortener.git/cmd/reset github.com/dmitrymack/go-url-shortener.git/...
+
 import (
 	"context"
 	"errors"
 	"math/rand"
 	"net/url"
 
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"go.uber.org/zap"
 )
@@ -28,6 +30,8 @@ type URLStorage interface {
 
 // DeleteTask is a job for asynchronously deleting a user's links, submitted
 // to the queue via ShortenService.EnqueueDelete.
+//
+// generate:reset
 type DeleteTask struct {
 	UserID string
 	IDs    []string
@@ -86,7 +90,7 @@ func (s *ShortenService) GetUrlsByUser(userID string) ([]storage.URLRecord, erro
 // generation on a key collision. If the URL was already shortened before,
 // it returns the existing short link and storage.ErrDuplicateOriginalURL.
 func (s *ShortenService) CreateShortURL(ctx context.Context, originURL string) (string, error) {
-	userID := ctx.Value(contextKeys.UserIDContextKey).(string)
+	userID := ctx.Value(contextkeys.UserIDContextKey).(string)
 
 	for {
 		id := generateID()
@@ -122,7 +126,7 @@ func (s *ShortenService) CreateShortURL(ctx context.Context, originURL string) (
 // single batch call to the storage and returns the corresponding short URLs
 // in the same order as the input originURLs.
 func (s *ShortenService) CreateBatchShortURL(ctx context.Context, originURLs []string) ([]string, error) {
-	userID := ctx.Value(contextKeys.UserIDContextKey).(string)
+	userID := ctx.Value(contextkeys.UserIDContextKey).(string)
 	items := make([]storage.URLRecord, 0, len(originURLs))
 	res := make([]string, 0, len(originURLs))
 

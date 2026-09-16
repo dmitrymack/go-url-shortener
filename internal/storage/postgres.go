@@ -24,6 +24,8 @@ type Database interface {
 
 // URLRecord is a user's short link: an identifier (or a full short URL,
 // depending on context) and the original URL.
+//
+// generate:reset
 type URLRecord struct {
 	ID        string `json:"short_url"`
 	OriginURL string `json:"original_url"`

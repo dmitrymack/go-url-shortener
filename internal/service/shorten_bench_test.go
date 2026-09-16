@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
 	"go.uber.org/zap"
 )
@@ -19,7 +19,7 @@ func BenchmarkGenerateID(b *testing.B) {
 func BenchmarkCreateShortURL(b *testing.B) {
 	store := storage.NewStorage()
 	s := NewShortenService(store, "http://localhost:8080", zap.NewNop())
-	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "bench_user")
+	ctx := context.WithValue(context.Background(), contextkeys.UserIDContextKey, "bench_user")
 
 	for b.Loop() {
 		if _, err := s.CreateShortURL(ctx, "https://example.com/some/long/path"); err != nil {
@@ -31,7 +31,7 @@ func BenchmarkCreateShortURL(b *testing.B) {
 func BenchmarkGetOriginalURL(b *testing.B) {
 	store := storage.NewStorage()
 	s := NewShortenService(store, "http://localhost:8080", zap.NewNop())
-	ctx := context.WithValue(context.Background(), contextKeys.UserIDContextKey, "bench_user")
+	ctx := context.WithValue(context.Background(), contextkeys.UserIDContextKey, "bench_user")
 
 	shortURL, err := s.CreateShortURL(ctx, "https://example.com/some/long/path")
 	if err != nil {

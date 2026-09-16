@@ -9,31 +9,31 @@ import (
 	"math/rand"
 	"net/http"
 
-	"github.com/dmitrymack/go-url-shortener.git/internal/contextKeys"
+	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 )
 
 // AuthorizerHandler identifies the user via the JWT stored in the
-// contextKeys.UserTokenCookieName cookie and puts their identifier into the
-// request context under contextKeys.UserIDContextKey. If the cookie is
+// contextkeys.UserTokenCookieName cookie and puts their identifier into the
+// request context under contextkeys.UserIDContextKey. If the cookie is
 // missing, it issues a new user: generates a UUID, signs a token, and sets
 // the cookie on the response. If the cookie is present but the token is
 // invalid, it responds with 401.
 func AuthorizerHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cookie, err := r.Cookie(string(contextKeys.UserTokenCookieName))
+		cookie, err := r.Cookie(string(contextkeys.UserTokenCookieName))
 
 		if errors.Is(err, http.ErrNoCookie) {
 			userID := generateUUID(16)
 
 			token, _ := service.BuildJWTString(userID)
 			http.SetCookie(w, &http.Cookie{
-				Name:  string(contextKeys.UserTokenCookieName),
+				Name:  string(contextkeys.UserTokenCookieName),
 				Value: token,
 				Path:  "/",
 			})
 
-			ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, userID)
+			ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -43,7 +43,7 @@ func AuthorizerHandler(next http.Handler) http.Handler {
 			http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
-		ctx := context.WithValue(r.Context(), contextKeys.UserIDContextKey, userID)
+		ctx := context.WithValue(r.Context(), contextkeys.UserIDContextKey, userID)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
