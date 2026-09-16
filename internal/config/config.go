@@ -25,6 +25,8 @@ type Config struct {
 	AuditFile string
 	// AuditURL is the URL of the remote audit sink (flag --audit-url, env AUDIT_URL). An empty string disables remote auditing.
 	AuditURL string
+	// EnableHTTPS turns on TLS for the server (flag -s, env ENABLE_HTTPS). Any non-empty ENABLE_HTTPS value enables it, regardless of its content.
+	EnableHTTPS bool
 }
 
 // NewConfig parses command-line flags and environment variables and returns
@@ -39,6 +41,7 @@ func NewConfig(logger *zap.Logger) *Config {
 	flag.StringVar(&cfg.DSN, "d", "", "Input Database DSN")
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Audit log file path")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Audit log remote server URL")
+	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "Enable HTTPS")
 
 	flag.Parse()
 
@@ -64,6 +67,10 @@ func NewConfig(logger *zap.Logger) *Config {
 
 	if envAuditURL := os.Getenv("AUDIT_URL"); envAuditURL != "" {
 		cfg.AuditURL = envAuditURL
+	}
+
+	if envEnableHTTPS := os.Getenv("ENABLE_HTTPS"); envEnableHTTPS != "" {
+		cfg.EnableHTTPS = true
 	}
 
 	_, err := url.ParseRequestURI(cfg.BaseURL)

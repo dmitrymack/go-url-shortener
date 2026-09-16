@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
@@ -114,9 +115,26 @@ func main() {
 
 	r.Delete("/api/user/urls", h.DeleteUserUrls)
 
-	err = http.ListenAndServe(cfg.ServerAddress, r)
+	srv := &http.Server{
+		Addr:    cfg.ServerAddress,
+		Handler: r,
+	}
 
-	if err != nil {
+	if cfg.EnableHTTPS {
+		cert, err := selfSignedCert()
+		if err != nil {
+			logger.Fatal("failed to generate TLS certificate", zap.Error(err))
+		}
+		srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+
+		err = srv.ListenAndServeTLS("", "")
+		if err != nil {
+			logger.Fatal("failed to start server", zap.Error(err))
+		}
+		return
+	}
+
+	if err := srv.ListenAndServe(); err != nil {
 		logger.Fatal("failed to start server", zap.Error(err))
 	}
 }
