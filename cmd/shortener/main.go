@@ -11,6 +11,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
 	"github.com/dmitrymack/go-url-shortener.git/internal/config"
@@ -120,23 +122,41 @@ func main() {
 		Handler: r,
 	}
 
-	if cfg.EnableHTTPS {
-		cert, err := selfSignedCert()
-		if err != nil {
-			logger.Fatal("failed to generate TLS certificate", zap.Error(err))
+	serverErr := make(chan error, 1)
+	go func() {
+		if cfg.EnableHTTPS {
+			cert, err := selfSignedCert()
+			if err != nil {
+				serverErr <- fmt.Errorf("generating TLS certificate: %w", err)
+				return
+			}
+			srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+			serverErr <- srv.ListenAndServeTLS("", "")
+			return
 		}
-		srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+		serverErr <- srv.ListenAndServe()
+	}()
 
-		err = srv.ListenAndServeTLS("", "")
-		if err != nil {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+
+	select {
+	case <-ctx.Done():
+		if err := srv.Shutdown(context.Background()); err != nil {
+			logger.Error("HTTP server shutdown failed", zap.Error(err))
+		}
+	case err := <-serverErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Fatal("failed to start server", zap.Error(err))
 		}
-		return
 	}
 
-	if err := srv.ListenAndServe(); err != nil {
-		logger.Fatal("failed to start server", zap.Error(err))
-	}
+	// The HTTP server is down, so no more requests can enqueue a deletion
+	// or an audit event — safe to drain and stop both.
+	service.Stop()
+	auditLog.Stop()
+
+	logger.Info("server shut down gracefully")
 }
 
 // printBuildInfo prints the buildVersion/buildDate/buildCommit values (set

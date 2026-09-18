@@ -75,6 +75,7 @@ type Log struct {
 	observers map[string]*observerHandle
 	mu        sync.RWMutex
 	logger    *zap.SugaredLogger
+	wg        sync.WaitGroup
 }
 
 // NewLog creates an empty Log with no subscribers. logger is used to report
@@ -95,7 +96,9 @@ func (l *Log) Register(o Observer) {
 	h := &observerHandle{observer: o, events: make(chan Event, eventBufferSize)}
 	l.observers[o.GetID()] = h
 
+	l.wg.Add(1)
 	go func() {
+		defer l.wg.Done()
 		for event := range h.events {
 			o.Update(event)
 		}
@@ -129,4 +132,19 @@ func (l *Log) Notify(event Event) {
 			l.logger.Warnln("audit: observer is falling behind, dropping event", "id", id)
 		}
 	}
+}
+
+// Stop closes every registered observer's channel and waits for their
+// delivery goroutines to finish delivering whatever events were already
+// buffered, so a shutdown doesn't drop pending audit events. Register must
+// not be called after Stop.
+func (l *Log) Stop() {
+	l.mu.Lock()
+	for id, h := range l.observers {
+		close(h.events)
+		delete(l.observers, id)
+	}
+	l.mu.Unlock()
+
+	l.wg.Wait()
 }
