@@ -10,6 +10,7 @@ import (
 	"errors"
 	"math/rand"
 	"net/url"
+	"sync"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
@@ -44,6 +45,7 @@ type ShortenService struct {
 	baseURL     string
 	deleteQueue chan DeleteTask
 	logger      *zap.SugaredLogger
+	wg          sync.WaitGroup
 }
 
 // NewShortenService creates a ShortenService over storage s. baseURL is the
@@ -164,13 +166,24 @@ func (s *ShortenService) SetDeletedBatch(ctx context.Context, keys []string, use
 // deletion jobs submitted via EnqueueDelete and marks the corresponding
 // links as deleted in the storage.
 func (s *ShortenService) StartDeleteWorker() {
+	s.wg.Add(1)
 	go func() {
+		defer s.wg.Done()
 		for task := range s.deleteQueue {
 			if err := s.storage.SetDeletedBatch(context.Background(), task.IDs, task.UserID); err != nil {
 				s.logger.Errorln("delete batch failed", "error", err)
 			}
 		}
 	}()
+}
+
+// Stop closes the deletion queue and waits for the worker started by
+// StartDeleteWorker to finish processing whatever tasks were already
+// queued, so a shutdown doesn't drop pending deletions. EnqueueDelete must
+// not be called after Stop.
+func (s *ShortenService) Stop() {
+	close(s.deleteQueue)
+	s.wg.Wait()
 }
 
 // generateID returns a random alphanumeric identifier of fixed length for

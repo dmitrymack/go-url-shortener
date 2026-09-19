@@ -6,10 +6,14 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"log"
 	"net/http"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
 	"github.com/dmitrymack/go-url-shortener.git/internal/config"
@@ -37,6 +41,10 @@ var (
 	buildDate    = "N/A"
 	buildCommit  = "N/A"
 )
+
+// shutdownTimeout bounds how long graceful shutdown waits for in-flight
+// requests before srv.Close forcibly drops any that are still open.
+const shutdownTimeout = 10 * time.Second
 
 func main() {
 	printBuildInfo()
@@ -114,11 +122,52 @@ func main() {
 
 	r.Delete("/api/user/urls", h.DeleteUserUrls)
 
-	err = http.ListenAndServe(cfg.ServerAddress, r)
-
-	if err != nil {
-		logger.Fatal("failed to start server", zap.Error(err))
+	srv := &http.Server{
+		Addr:    cfg.ServerAddress,
+		Handler: r,
 	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		if cfg.EnableHTTPS {
+			cert, err := selfSignedCert()
+			if err != nil {
+				serverErr <- fmt.Errorf("generating TLS certificate: %w", err)
+				return
+			}
+			srv.TLSConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
+			serverErr <- srv.ListenAndServeTLS("", "")
+			return
+		}
+		serverErr <- srv.ListenAndServe()
+	}()
+
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	defer stop()
+
+	select {
+	case <-ctx.Done():
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("HTTP server shutdown timed out, closing forcibly", zap.Error(err))
+			if err := srv.Close(); err != nil {
+				logger.Error("HTTP server close failed", zap.Error(err))
+			}
+		}
+	case err := <-serverErr:
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			logger.Fatal("failed to start server", zap.Error(err))
+		}
+	}
+
+	// The HTTP server is down, so no more requests can enqueue a deletion
+	// or an audit event — safe to drain and stop both.
+	service.Stop()
+	auditLog.Stop()
+
+	logger.Info("server shut down gracefully")
 }
 
 // printBuildInfo prints the buildVersion/buildDate/buildCommit values (set

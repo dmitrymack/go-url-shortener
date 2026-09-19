@@ -240,3 +240,35 @@ func TestStartDeleteWorker_LogsStorageError(t *testing.T) {
 		return logs.Len() > 0
 	}, time.Second, time.Millisecond, "expected an error to be logged")
 }
+
+func TestStop_DrainsQueueBeforeReturning(t *testing.T) {
+	const taskCount = 5
+	processed := make(chan string, taskCount)
+	store := &mockStorage{
+		SetDeletedBatchFn: func(ctx context.Context, keys []string, userID string) error {
+			processed <- userID
+			return nil
+		},
+	}
+
+	s := NewShortenService(store, testBaseURL, zap.NewNop())
+	s.StartDeleteWorker()
+
+	for i := 0; i < taskCount; i++ {
+		s.EnqueueDelete(DeleteTask{UserID: "user1", IDs: []string{"abc123"}})
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.Stop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not return in time")
+	}
+
+	assert.Len(t, processed, taskCount, "Stop must wait for every already-queued task to be processed")
+}
