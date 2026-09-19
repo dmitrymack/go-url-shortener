@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/dmitrymack/go-url-shortener.git/internal/audit"
 	"github.com/dmitrymack/go-url-shortener.git/internal/config"
@@ -40,6 +41,10 @@ var (
 	buildDate    = "N/A"
 	buildCommit  = "N/A"
 )
+
+// shutdownTimeout bounds how long graceful shutdown waits for in-flight
+// requests before srv.Close forcibly drops any that are still open.
+const shutdownTimeout = 10 * time.Second
 
 func main() {
 	printBuildInfo()
@@ -142,8 +147,14 @@ func main() {
 
 	select {
 	case <-ctx.Done():
-		if err := srv.Shutdown(context.Background()); err != nil {
-			logger.Error("HTTP server shutdown failed", zap.Error(err))
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+
+		if err := srv.Shutdown(shutdownCtx); err != nil {
+			logger.Error("HTTP server shutdown timed out, closing forcibly", zap.Error(err))
+			if err := srv.Close(); err != nil {
+				logger.Error("HTTP server close failed", zap.Error(err))
+			}
 		}
 	case err := <-serverErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {

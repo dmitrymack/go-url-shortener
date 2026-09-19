@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 
 	"go.uber.org/zap"
 )
@@ -91,8 +92,10 @@ func NewConfig(logger *zap.Logger) *Config {
 	}
 
 	if envEnableHTTPS := os.Getenv("ENABLE_HTTPS"); envEnableHTTPS != "" {
-		cfg.EnableHTTPS = true
-		set["s"] = true
+		if v, err := strconv.ParseBool(envEnableHTTPS); err == nil {
+			cfg.EnableHTTPS = v
+			set["s"] = true
+		}
 	}
 
 	if envConfigFile := os.Getenv("CONFIG"); envConfigFile != "" {

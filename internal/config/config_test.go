@@ -77,6 +77,41 @@ func TestNewConfig_EnvOverridesFlags(t *testing.T) {
 	assert.Equal(t, "localhost:7070", cfg.ServerAddress)
 }
 
+func TestNewConfig_EnvEnableHTTPS_FalseDisablesIt(t *testing.T) {
+	t.Setenv("ENABLE_HTTPS", "false")
+
+	var cfg *Config
+	withArgs(t, []string{"-s"}, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	assert.False(t, cfg.EnableHTTPS, "ENABLE_HTTPS=false must override the -s flag")
+}
+
+func TestNewConfig_EnvEnableHTTPS_FalseBeatsFile(t *testing.T) {
+	path := writeConfigFile(t, `{"enable_https": true}`)
+	t.Setenv("ENABLE_HTTPS", "false")
+
+	var cfg *Config
+	withArgs(t, []string{"-c", path}, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	assert.False(t, cfg.EnableHTTPS, "ENABLE_HTTPS=false must override the config file value, not just the flag")
+}
+
+func TestNewConfig_EnvEnableHTTPS_GarbageFallsBackToFile(t *testing.T) {
+	path := writeConfigFile(t, `{"enable_https": true}`)
+	t.Setenv("ENABLE_HTTPS", "not-a-bool")
+
+	var cfg *Config
+	withArgs(t, []string{"-c", path}, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	assert.True(t, cfg.EnableHTTPS, "an unparseable ENABLE_HTTPS must not block the config file value")
+}
+
 func TestNewConfig_FileFillsInUnsetOptions(t *testing.T) {
 	path := writeConfigFile(t, `{
 		"server_address": "localhost:9999",
