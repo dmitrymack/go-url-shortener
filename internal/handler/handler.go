@@ -276,6 +276,29 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 	w.Write(respJSON)
 }
 
+// GetStats handles GET /api/internal/stats. It returns the number of short
+// URLs and users as JSON. Restricting access to the trusted subnet is the
+// job of middleware.TrustedSubnetHandler, not of this handler.
+func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
+	stats, err := h.service.GetStats(r.Context())
+	if err != nil {
+		h.logger.Errorln("GetStats error", "error", err)
+
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	respJSON, err := json.Marshal(stats)
+	if err != nil {
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(respJSON)
+}
+
 // DeleteUserUrls handles DELETE /api/user/urls. It accepts a list of short
 // identifiers and asynchronously (via the service's deletion queue) marks
 // the corresponding links of the current user as deleted. It returns status

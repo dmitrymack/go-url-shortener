@@ -27,6 +27,7 @@ type URLStorage interface {
 	SetDeletedBatch(ctx context.Context, keys []string, userID string) error
 
 	GetUrlsByUser(userID string) ([]storage.URLRecord, error)
+	Stats(ctx context.Context) (storage.Stats, error)
 }
 
 // DeleteTask is a job for asynchronously deleting a user's links, submitted
@@ -86,6 +87,11 @@ func (s *ShortenService) GetUrlsByUser(userID string) ([]storage.URLRecord, erro
 	}
 
 	return urls, nil
+}
+
+// GetStats returns the number of short URLs and users in the service.
+func (s *ShortenService) GetStats(ctx context.Context) (storage.Stats, error) {
+	return s.storage.Stats(ctx)
 }
 
 // CreateShortURL creates a short link for originURL, retrying identifier

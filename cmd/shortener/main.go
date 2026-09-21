@@ -110,17 +110,25 @@ func main() {
 	startProfilerServer("localhost:6060", logger)
 
 	r := chi.NewRouter()
-	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler, middleware.AuthorizerHandler)
+	r.Use(middleware.LoggingHandler(logger), middleware.GzipHandler)
 
-	r.Get("/{id}", h.GetURLByID)
-	r.Get("/ping", h.PingDatabase)
-	r.Get("/api/user/urls", h.GetUserURLS)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.AuthorizerHandler)
 
-	r.Post("/", h.SetShortURL)
-	r.Post("/api/shorten", h.SetShortURLByJSON)
-	r.Post("/api/shorten/batch", h.SetBatchURL)
+		r.Get("/{id}", h.GetURLByID)
+		r.Get("/ping", h.PingDatabase)
+		r.Get("/api/user/urls", h.GetUserURLS)
 
-	r.Delete("/api/user/urls", h.DeleteUserUrls)
+		r.Post("/", h.SetShortURL)
+		r.Post("/api/shorten", h.SetShortURLByJSON)
+		r.Post("/api/shorten/batch", h.SetBatchURL)
+
+		r.Delete("/api/user/urls", h.DeleteUserUrls)
+	})
+
+	// Internal endpoint: called by other services, not users, so it skips
+	// the cookie-based authorizer and is guarded by the trusted subnet.
+	r.With(middleware.TrustedSubnetHandler(cfg.TrustedNet)).Get("/api/internal/stats", h.GetStats)
 
 	srv := &http.Server{
 		Addr:    cfg.ServerAddress,

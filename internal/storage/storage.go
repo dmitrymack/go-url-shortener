@@ -75,6 +75,12 @@ func (s *Storage) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	return nil, errors.New("not implemented")
 }
 
+// Stats is not implemented for the in-memory store, since it does not track
+// users.
+func (s *Storage) Stats(ctx context.Context) (Stats, error) {
+	return Stats{}, errors.New("not implemented")
+}
+
 // SetDeletedBatch removes the records for keys.
 func (s *Storage) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {
 	s.mu.Lock()

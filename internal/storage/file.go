@@ -156,6 +156,12 @@ func (f *FileStorage) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	return nil, errors.New("not implemented")
 }
 
+// Stats is not implemented for the file store, since it does not track
+// users.
+func (f *FileStorage) Stats(ctx context.Context) (Stats, error) {
+	return Stats{}, errors.New("not implemented")
+}
+
 // SetDeletedBatch removes the records for keys from memory. The file on
 // disk is not rewritten.
 func (f *FileStorage) SetDeletedBatch(ctx context.Context, keys []string, userID string) error {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"strconv"
@@ -16,14 +17,16 @@ import (
 
 // Config holds the server startup parameters.
 type Config struct {
-	ServerAddress string // -a, SERVER_ADDRESS, server_address
-	BaseURL       string // -b, BASE_URL, base_url
-	StorageFile   string // -f, FILE_STORAGE_PATH, file_storage_path
-	DSN           string // -d, DATABASE_DSN, database_dsn; empty disables the DB
-	AuditFile     string // --audit-file, AUDIT_FILE, audit_file; empty disables file auditing
-	AuditURL      string // --audit-url, AUDIT_URL, audit_url; empty disables remote auditing
-	EnableHTTPS   bool   // -s, ENABLE_HTTPS, enable_https
-	ConfigFile    string // -c/-config, CONFIG
+	ServerAddress string     // -a, SERVER_ADDRESS, server_address
+	BaseURL       string     // -b, BASE_URL, base_url
+	StorageFile   string     // -f, FILE_STORAGE_PATH, file_storage_path
+	DSN           string     // -d, DATABASE_DSN, database_dsn; empty disables the DB
+	AuditFile     string     // --audit-file, AUDIT_FILE, audit_file; empty disables file auditing
+	AuditURL      string     // --audit-url, AUDIT_URL, audit_url; empty disables remote auditing
+	EnableHTTPS   bool       // -s, ENABLE_HTTPS, enable_https
+	TrustedSubnet string     // -t, TRUSTED_SUBNET, trusted_subnet (CIDR); empty denies access to the stats endpoint
+	TrustedNet    *net.IPNet // TrustedSubnet parsed; nil if TrustedSubnet is empty
+	ConfigFile    string     // -c/-config, CONFIG
 }
 
 // fileConfig is the JSON config file's shape. Pointer fields distinguish a
@@ -34,13 +37,15 @@ type fileConfig struct {
 	StorageFile   *string `json:"file_storage_path"`
 	DSN           *string `json:"database_dsn"`
 	EnableHTTPS   *bool   `json:"enable_https"`
+	TrustedSubnet *string `json:"trusted_subnet"`
 	AuditFile     *string `json:"audit_file"`
 	AuditURL      *string `json:"audit_url"`
 }
 
 // NewConfig assembles the Config from flags, environment variables, and an
 // optional JSON config file (-c/-config, CONFIG). It exits via logger.Fatal
-// if the config file can't be read/parsed or BaseURL isn't a valid URL.
+// if the config file can't be read/parsed, or BaseURL or TrustedSubnet
+// aren't valid.
 func NewConfig(logger *zap.Logger) *Config {
 	cfg := &Config{}
 
@@ -51,6 +56,7 @@ func NewConfig(logger *zap.Logger) *Config {
 	flag.StringVar(&cfg.AuditFile, "audit-file", "", "Audit log file path")
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Audit log remote server URL")
 	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "Enable HTTPS")
+	flag.StringVar(&cfg.TrustedSubnet, "t", "", "Trusted subnet (CIDR) allowed to use the internal stats endpoint")
 	flag.StringVar(&cfg.ConfigFile, "c", "", "Config file path")
 	flag.StringVar(&cfg.ConfigFile, "config", "", "Config file path")
 
@@ -98,6 +104,11 @@ func NewConfig(logger *zap.Logger) *Config {
 		}
 	}
 
+	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
+		cfg.TrustedSubnet = envTrustedSubnet
+		set["t"] = true
+	}
+
 	if envConfigFile := os.Getenv("CONFIG"); envConfigFile != "" {
 		cfg.ConfigFile = envConfigFile
 	}
@@ -113,6 +124,13 @@ func NewConfig(logger *zap.Logger) *Config {
 	_, err := url.ParseRequestURI(cfg.BaseURL)
 	if err != nil {
 		logger.Fatal("invalid base URL", zap.Error(err))
+	}
+
+	if cfg.TrustedSubnet != "" {
+		_, cfg.TrustedNet, err = net.ParseCIDR(cfg.TrustedSubnet)
+		if err != nil {
+			logger.Fatal("invalid trusted subnet", zap.Error(err))
+		}
 	}
 
 	return cfg
@@ -150,6 +168,9 @@ func applyFileConfig(cfg *Config, fc fileConfig, set map[string]bool) {
 	}
 	if fc.EnableHTTPS != nil && !set["s"] {
 		cfg.EnableHTTPS = *fc.EnableHTTPS
+	}
+	if fc.TrustedSubnet != nil && !set["t"] {
+		cfg.TrustedSubnet = *fc.TrustedSubnet
 	}
 	if fc.AuditFile != nil && !set["audit-file"] {
 		cfg.AuditFile = *fc.AuditFile

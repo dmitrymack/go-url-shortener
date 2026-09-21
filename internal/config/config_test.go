@@ -193,3 +193,63 @@ func TestNewConfig_InvalidJSONIsFatal(t *testing.T) {
 		})
 	})
 }
+
+func TestNewConfig_TrustedSubnet_EmptyByDefault(t *testing.T) {
+	var cfg *Config
+	withArgs(t, nil, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	assert.Empty(t, cfg.TrustedSubnet)
+	assert.Nil(t, cfg.TrustedNet, "an empty trusted subnet must stay nil so the stats endpoint denies everyone")
+}
+
+func TestNewConfig_TrustedSubnet_FromFlag(t *testing.T) {
+	var cfg *Config
+	withArgs(t, []string{"-t", "192.168.1.0/24"}, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	assert.Equal(t, "192.168.1.0/24", cfg.TrustedSubnet)
+	require.NotNil(t, cfg.TrustedNet)
+	assert.Equal(t, "192.168.1.0/24", cfg.TrustedNet.String())
+}
+
+func TestNewConfig_TrustedSubnet_FromFile(t *testing.T) {
+	path := writeConfigFile(t, `{"trusted_subnet": "10.0.0.0/8"}`)
+
+	var cfg *Config
+	withArgs(t, []string{"-c", path}, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	require.NotNil(t, cfg.TrustedNet)
+	assert.Equal(t, "10.0.0.0/8", cfg.TrustedNet.String())
+}
+
+func TestNewConfig_TrustedSubnet_Priority(t *testing.T) {
+	path := writeConfigFile(t, `{"trusted_subnet": "10.0.0.0/8"}`)
+
+	var flagOverFile *Config
+	withArgs(t, []string{"-c", path, "-t", "172.16.0.0/12"}, func() {
+		flagOverFile = NewConfig(zap.NewNop())
+	})
+	assert.Equal(t, "172.16.0.0/12", flagOverFile.TrustedSubnet, "a flag beats the config file")
+
+	t.Setenv("TRUSTED_SUBNET", "192.168.0.0/16")
+	var envOverFlag *Config
+	withArgs(t, []string{"-c", path, "-t", "172.16.0.0/12"}, func() {
+		envOverFlag = NewConfig(zap.NewNop())
+	})
+	assert.Equal(t, "192.168.0.0/16", envOverFlag.TrustedSubnet, "an env var beats both the flag and the config file")
+}
+
+func TestNewConfig_TrustedSubnet_InvalidCIDRIsFatal(t *testing.T) {
+	logger := panicOnFatal()
+
+	assert.Panics(t, func() {
+		withArgs(t, []string{"-t", "not-a-cidr"}, func() {
+			NewConfig(logger)
+		})
+	})
+}
