@@ -253,3 +253,35 @@ func TestNewConfig_TrustedSubnet_InvalidCIDRIsFatal(t *testing.T) {
 		})
 	})
 }
+
+func TestNewConfig_GRPCAddress_Default(t *testing.T) {
+	var cfg *Config
+	withArgs(t, nil, func() {
+		cfg = NewConfig(zap.NewNop())
+	})
+
+	assert.Equal(t, "localhost:3200", cfg.GRPCAddress)
+}
+
+func TestNewConfig_GRPCAddress_Priority(t *testing.T) {
+	path := writeConfigFile(t, `{"grpc_address": "localhost:1000"}`)
+
+	var fileOnly *Config
+	withArgs(t, []string{"-c", path}, func() {
+		fileOnly = NewConfig(zap.NewNop())
+	})
+	assert.Equal(t, "localhost:1000", fileOnly.GRPCAddress)
+
+	var flagOverFile *Config
+	withArgs(t, []string{"-c", path, "-g", "localhost:2000"}, func() {
+		flagOverFile = NewConfig(zap.NewNop())
+	})
+	assert.Equal(t, "localhost:2000", flagOverFile.GRPCAddress, "a flag beats the config file")
+
+	t.Setenv("GRPC_ADDRESS", "localhost:3000")
+	var envOverFlag *Config
+	withArgs(t, []string{"-c", path, "-g", "localhost:2000"}, func() {
+		envOverFlag = NewConfig(zap.NewNop())
+	})
+	assert.Equal(t, "localhost:3000", envOverFlag.GRPCAddress, "an env var beats both the flag and the config file")
+}

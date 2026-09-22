@@ -1,6 +1,5 @@
-// Package config assembles the configuration from flags, environment
-// variables, and an optional JSON config file (in that priority order,
-// highest first).
+// Package config assembles the configuration from flags, env vars, and an
+// optional JSON config file (in that priority order, highest first).
 package config
 
 import (
@@ -26,6 +25,7 @@ type Config struct {
 	EnableHTTPS   bool       // -s, ENABLE_HTTPS, enable_https
 	TrustedSubnet string     // -t, TRUSTED_SUBNET, trusted_subnet (CIDR); empty denies access to the stats endpoint
 	TrustedNet    *net.IPNet // TrustedSubnet parsed; nil if TrustedSubnet is empty
+	GRPCAddress   string     // -g, GRPC_ADDRESS, grpc_address
 	ConfigFile    string     // -c/-config, CONFIG
 }
 
@@ -38,14 +38,13 @@ type fileConfig struct {
 	DSN           *string `json:"database_dsn"`
 	EnableHTTPS   *bool   `json:"enable_https"`
 	TrustedSubnet *string `json:"trusted_subnet"`
+	GRPCAddress   *string `json:"grpc_address"`
 	AuditFile     *string `json:"audit_file"`
 	AuditURL      *string `json:"audit_url"`
 }
 
-// NewConfig assembles the Config from flags, environment variables, and an
-// optional JSON config file (-c/-config, CONFIG). It exits via logger.Fatal
-// if the config file can't be read/parsed, or BaseURL or TrustedSubnet
-// aren't valid.
+// NewConfig assembles the Config from flags, env vars, and an optional
+// JSON config file. It exits via logger.Fatal on any invalid value.
 func NewConfig(logger *zap.Logger) *Config {
 	cfg := &Config{}
 
@@ -57,6 +56,7 @@ func NewConfig(logger *zap.Logger) *Config {
 	flag.StringVar(&cfg.AuditURL, "audit-url", "", "Audit log remote server URL")
 	flag.BoolVar(&cfg.EnableHTTPS, "s", false, "Enable HTTPS")
 	flag.StringVar(&cfg.TrustedSubnet, "t", "", "Trusted subnet (CIDR) allowed to use the internal stats endpoint")
+	flag.StringVar(&cfg.GRPCAddress, "g", "localhost:3200", "Input host and port of the gRPC server")
 	flag.StringVar(&cfg.ConfigFile, "c", "", "Config file path")
 	flag.StringVar(&cfg.ConfigFile, "config", "", "Config file path")
 
@@ -107,6 +107,11 @@ func NewConfig(logger *zap.Logger) *Config {
 	if envTrustedSubnet := os.Getenv("TRUSTED_SUBNET"); envTrustedSubnet != "" {
 		cfg.TrustedSubnet = envTrustedSubnet
 		set["t"] = true
+	}
+
+	if envGRPCAddr := os.Getenv("GRPC_ADDRESS"); envGRPCAddr != "" {
+		cfg.GRPCAddress = envGRPCAddr
+		set["g"] = true
 	}
 
 	if envConfigFile := os.Getenv("CONFIG"); envConfigFile != "" {
@@ -171,6 +176,9 @@ func applyFileConfig(cfg *Config, fc fileConfig, set map[string]bool) {
 	}
 	if fc.TrustedSubnet != nil && !set["t"] {
 		cfg.TrustedSubnet = *fc.TrustedSubnet
+	}
+	if fc.GRPCAddress != nil && !set["g"] {
+		cfg.GRPCAddress = *fc.GRPCAddress
 	}
 	if fc.AuditFile != nil && !set["audit-file"] {
 		cfg.AuditFile = *fc.AuditFile
