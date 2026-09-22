@@ -272,3 +272,32 @@ func TestStop_DrainsQueueBeforeReturning(t *testing.T) {
 
 	assert.Len(t, processed, taskCount, "Stop must wait for every already-queued task to be processed")
 }
+
+func TestGetStats(t *testing.T) {
+	want := storage.Stats{URLs: 3, Users: 2}
+	store := &mockStorage{
+		StatsFn: func(ctx context.Context) (storage.Stats, error) {
+			return want, nil
+		},
+	}
+	s := NewShortenService(store, testBaseURL, zap.NewNop())
+
+	got, err := s.GetStats(context.Background())
+
+	require.NoError(t, err)
+	assert.Equal(t, want, got)
+}
+
+func TestGetStats_StorageError(t *testing.T) {
+	wantErr := errors.New("storage unavailable")
+	store := &mockStorage{
+		StatsFn: func(ctx context.Context) (storage.Stats, error) {
+			return storage.Stats{}, wantErr
+		},
+	}
+	s := NewShortenService(store, testBaseURL, zap.NewNop())
+
+	_, err := s.GetStats(context.Background())
+
+	assert.ErrorIs(t, err, wantErr)
+}

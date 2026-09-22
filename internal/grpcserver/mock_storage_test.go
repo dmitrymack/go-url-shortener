@@ -1,4 +1,4 @@
-package handler
+package grpcserver
 
 import (
 	"context"
@@ -7,11 +7,7 @@ import (
 )
 
 // mockURLStorage is a service.URLStorage test double: each method delegates
-// to the corresponding func field. It exists for the handful of behaviors
-// the real storage.Storage/FileStorage can't be made to exhibit on demand
-// (GetUrlsByUser actually returning records — both real in-memory stores
-// return "not implemented" — and arbitrary storage errors); everywhere else
-// tests use storage.NewStorage() directly.
+// to the corresponding func field, for behaviors storage.Storage can't fake.
 type mockURLStorage struct {
 	GetFn             func(key string) (string, error)
 	SetFn             func(ctx context.Context, key, value, userID string) (string, error)

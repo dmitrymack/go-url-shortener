@@ -129,7 +129,7 @@ func (l *Log) Notify(event Event) {
 		select {
 		case h.events <- event:
 		default:
-			l.logger.Warnln("audit: observer is falling behind, dropping event", "id", id)
+			l.logger.Warnw("audit: observer is falling behind, dropping event", "id", id)
 		}
 	}
 }

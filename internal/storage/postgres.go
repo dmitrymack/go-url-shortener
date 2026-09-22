@@ -31,6 +31,15 @@ type URLRecord struct {
 	OriginURL string `json:"original_url"`
 }
 
+// Stats holds the service-wide counters: the number of live (not deleted)
+// short URLs and the number of users who have created at least one.
+//
+// generate:reset
+type Stats struct {
+	URLs  int `json:"urls"`
+	Users int `json:"users"`
+}
+
 // Postgres is a short link store backed by PostgreSQL. It deduplicates
 // links by original URL using a unique index in the database.
 type Postgres struct {
@@ -170,6 +179,18 @@ func (p *Postgres) GetUrlsByUser(userID string) ([]URLRecord, error) {
 	}
 
 	return items, nil
+}
+
+// Stats returns the number of live (not deleted) links and of users who
+// ever created one (deleting a user's links doesn't remove the user).
+func (p *Postgres) Stats(ctx context.Context) (Stats, error) {
+	var stats Stats
+	err := p.Pool.QueryRow(
+		ctx,
+		"SELECT COUNT(*) FILTER (WHERE NOT is_deleted), COUNT(DISTINCT user_id) FROM short_urls",
+	).Scan(&stats.URLs, &stats.Users)
+
+	return stats, err
 }
 
 // SetDeletedBatch marks links keys, owned by userID, as deleted.

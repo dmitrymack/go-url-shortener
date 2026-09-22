@@ -19,6 +19,7 @@ type mockStorage struct {
 	SetBatchFn        func(ctx context.Context, batchItems []storage.URLRecord, userID string) error
 	SetDeletedBatchFn func(ctx context.Context, keys []string, userID string) error
 	GetUrlsByUserFn   func(userID string) ([]storage.URLRecord, error)
+	StatsFn           func(ctx context.Context) (storage.Stats, error)
 }
 
 func (m *mockStorage) Get(key string) (string, error) {
@@ -39,4 +40,8 @@ func (m *mockStorage) SetDeletedBatch(ctx context.Context, keys []string, userID
 
 func (m *mockStorage) GetUrlsByUser(userID string) ([]storage.URLRecord, error) {
 	return m.GetUrlsByUserFn(userID)
+}
+
+func (m *mockStorage) Stats(ctx context.Context) (storage.Stats, error) {
+	return m.StatsFn(ctx)
 }

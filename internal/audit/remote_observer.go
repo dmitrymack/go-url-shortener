@@ -49,7 +49,7 @@ func (r *RemoteObserver) GetID() string {
 func (r *RemoteObserver) Update(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		r.logger.Errorln("audit: failed to marshal event", "error", err)
+		r.logger.Errorw("audit: failed to marshal event", "error", err)
 		return
 	}
 
@@ -60,10 +60,10 @@ func (r *RemoteObserver) Update(event Event) {
 			return
 		}
 		if !retry || attempt == maxSendAttempts {
-			r.logger.Errorln("audit: failed to send event", "attempt", attempt, "error", err)
+			r.logger.Errorw("audit: failed to send event", "attempt", attempt, "error", err)
 			return
 		}
-		r.logger.Warnln("audit: retrying event delivery", "attempt", attempt, "error", err)
+		r.logger.Warnw("audit: retrying event delivery", "attempt", attempt, "error", err)
 		time.Sleep(backoff)
 		backoff *= 2
 	}

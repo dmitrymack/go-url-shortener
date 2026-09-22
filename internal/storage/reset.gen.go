@@ -11,6 +11,15 @@ func (e *Event) Reset() {
 	e.OriginalURL = ""
 }
 
+func (s *Stats) Reset() {
+	if s == nil {
+		return
+	}
+
+	s.URLs = 0
+	s.Users = 0
+}
+
 func (u *URLRecord) Reset() {
 	if u == nil {
 		return

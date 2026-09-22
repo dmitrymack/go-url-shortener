@@ -1,6 +1,5 @@
-// Package middleware contains the HTTP middleware of the URL shortener
-// service: cookie-based authorization, request logging, and gzip
-// compression.
+// Package middleware contains the HTTP middleware and gRPC interceptors:
+// cookie/JWT-based authorization, request logging, and gzip compression.
 package middleware
 
 import (
@@ -13,12 +12,8 @@ import (
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 )
 
-// AuthorizerHandler identifies the user via the JWT stored in the
-// contextkeys.UserTokenCookieName cookie and puts their identifier into the
-// request context under contextkeys.UserIDContextKey. If the cookie is
-// missing, it issues a new user: generates a UUID, signs a token, and sets
-// the cookie on the response. If the cookie is present but the token is
-// invalid, it responds with 401.
+// AuthorizerHandler identifies the user via the JWT cookie, issuing a new
+// one if missing. An invalid cookie gets a 401.
 func AuthorizerHandler(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(string(contextkeys.UserTokenCookieName))

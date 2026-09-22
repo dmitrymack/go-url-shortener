@@ -263,3 +263,46 @@ func TestAuditEvent_NoAuditorIsNoop(t *testing.T) {
 		h.auditEvent(context.Background(), "shorten", "https://example.com")
 	})
 }
+
+func TestGetStats(t *testing.T) {
+	t.Run("positive test", func(t *testing.T) {
+		store := &mockURLStorage{
+			StatsFn: func(ctx context.Context) (storage.Stats, error) {
+				return storage.Stats{URLs: 5, Users: 2}, nil
+			},
+		}
+		service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+		h := NewHandler(service, &MockDB{}, nil, zap.NewNop())
+
+		r := httptest.NewRequest(http.MethodGet, "/api/internal/stats", nil)
+		w := httptest.NewRecorder()
+
+		h.GetStats(w, r)
+
+		res := w.Result()
+		defer res.Body.Close()
+
+		assert.Equal(t, http.StatusOK, res.StatusCode)
+		assert.Equal(t, "application/json", res.Header.Get("Content-Type"))
+		assert.JSONEq(t, `{"urls":5,"users":2}`, w.Body.String())
+	})
+
+	t.Run("storage error", func(t *testing.T) {
+		store := &mockURLStorage{
+			StatsFn: func(ctx context.Context) (storage.Stats, error) {
+				return storage.Stats{}, errors.New("storage unavailable")
+			},
+		}
+		service := shortenService.NewShortenService(store, "http://localhost:8080", zap.NewNop())
+		h := NewHandler(service, &MockDB{}, nil, zap.NewNop())
+
+		r := httptest.NewRequest(http.MethodGet, "/api/internal/stats", nil)
+		w := httptest.NewRecorder()
+
+		h.GetStats(w, r)
+
+		res := w.Result()
+		defer res.Body.Close()
+		assert.Equal(t, http.StatusInternalServerError, res.StatusCode)
+	})
+}

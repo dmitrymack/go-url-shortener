@@ -38,7 +38,7 @@ func (f *FileObserver) GetID() string {
 func (f *FileObserver) Update(event Event) {
 	data, err := json.Marshal(event)
 	if err != nil {
-		f.logger.Errorln("audit: failed to marshal event", "error", err)
+		f.logger.Errorw("audit: failed to marshal event", "error", err)
 		return
 	}
 	data = append(data, '\n')
@@ -47,7 +47,7 @@ func (f *FileObserver) Update(event Event) {
 	defer f.mu.Unlock()
 
 	if _, err := f.file.Write(data); err != nil {
-		f.logger.Errorln("audit: failed to write event to file", "error", err)
+		f.logger.Errorw("audit: failed to write event to file", "error", err)
 	}
 }
 
