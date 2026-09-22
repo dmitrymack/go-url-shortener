@@ -10,7 +10,9 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
@@ -53,6 +55,14 @@ func main() {
 		// No logger exists yet, so this one failure has nowhere else to go.
 		log.Fatal(err)
 	}
+
+	// run's deferred cleanup (closing the DB pool, storage files, the
+	// logger) must all fire before the process exits, which os.Exit skips
+	// — so main itself stays defer-free and only picks the exit code.
+	os.Exit(run(logger))
+}
+
+func run(logger *zap.Logger) int {
 	defer logger.Sync()
 
 	cfg := config.NewConfig(logger)
@@ -61,7 +71,7 @@ func main() {
 	var db storage.Database
 	var postgres *storage.Postgres
 
-	err = runMigrations(cfg.DSN)
+	err := runMigrations(cfg.DSN)
 	if err != nil {
 		logger.Error("migration failed", zap.Error(err))
 	} else {
@@ -155,13 +165,13 @@ func main() {
 		serverErr <- srv.ListenAndServe()
 	}()
 
-	grpcOpts := []grpc.ServerOption{grpc.UnaryInterceptor(middleware.GRPCAuthInterceptor)}
+	grpcOpts := []grpc.ServerOption{grpc.UnaryInterceptor(middleware.GRPCAuthInterceptor(logger))}
 	if tlsCert != nil {
 		grpcOpts = append(grpcOpts, grpc.Creds(credentials.NewTLS(&tls.Config{Certificates: []tls.Certificate{*tlsCert}})))
 	}
 
 	grpcServer := grpc.NewServer(grpcOpts...)
-	shortenerpb.RegisterShortenerServiceServer(grpcServer, grpcserver.NewServer(service, auditLog))
+	shortenerpb.RegisterShortenerServiceServer(grpcServer, grpcserver.NewServer(service, auditLog, logger))
 
 	grpcListener, err := net.Listen("tcp", cfg.GRPCAddress)
 	if err != nil {
@@ -176,38 +186,53 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	defer stop()
 
+	// runCtx ends the wait below on a signal (via ctx) or on either server
+	// failing after it started serving, so a runtime crash drains the
+	// delete/audit queues and stops the other server exactly like a
+	// signal would, instead of exiting mid-flight.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	defer cancelRun()
+
+	var (
+		runErr     error
+		runErrOnce sync.Once
+	)
+	go func() {
+		if err := <-serverErr; err != nil && !errors.Is(err, http.ErrServerClosed) {
+			runErrOnce.Do(func() { runErr = fmt.Errorf("HTTP server: %w", err) })
+			cancelRun()
+		}
+	}()
+	go func() {
+		if err := <-grpcErr; err != nil {
+			runErrOnce.Do(func() { runErr = fmt.Errorf("gRPC server: %w", err) })
+			cancelRun()
+		}
+	}()
+
+	<-runCtx.Done()
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		logger.Error("HTTP server shutdown timed out, closing forcibly", zap.Error(err))
+		if err := srv.Close(); err != nil {
+			logger.Error("HTTP server close failed", zap.Error(err))
+		}
+	}
+
+	grpcStopped := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(grpcStopped)
+	}()
+
 	select {
-	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-
-		if err := srv.Shutdown(shutdownCtx); err != nil {
-			logger.Error("HTTP server shutdown timed out, closing forcibly", zap.Error(err))
-			if err := srv.Close(); err != nil {
-				logger.Error("HTTP server close failed", zap.Error(err))
-			}
-		}
-
-		grpcStopped := make(chan struct{})
-		go func() {
-			grpcServer.GracefulStop()
-			close(grpcStopped)
-		}()
-
-		select {
-		case <-grpcStopped:
-		case <-time.After(shutdownTimeout):
-			logger.Error("gRPC server shutdown timed out, closing forcibly")
-			grpcServer.Stop()
-		}
-	case err := <-serverErr:
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatal("failed to start server", zap.Error(err))
-		}
-	case err := <-grpcErr:
-		if err != nil {
-			logger.Fatal("failed to start gRPC server", zap.Error(err))
-		}
+	case <-grpcStopped:
+	case <-time.After(shutdownTimeout):
+		logger.Error("gRPC server shutdown timed out, closing forcibly")
+		grpcServer.Stop()
 	}
 
 	// Both servers are down, so no more requests can enqueue a deletion or
@@ -215,7 +240,13 @@ func main() {
 	service.Stop()
 	auditLog.Stop()
 
+	if runErr != nil {
+		logger.Error("server exiting after a runtime failure", zap.Error(runErr))
+		return 1
+	}
+
 	logger.Info("server shut down gracefully")
+	return 0
 }
 
 // printBuildInfo prints the buildVersion/buildDate/buildCommit values (set

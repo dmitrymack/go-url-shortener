@@ -11,6 +11,7 @@ import (
 	"github.com/dmitrymack/go-url-shortener.git/internal/contextkeys"
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/dmitrymack/go-url-shortener.git/internal/storage"
+	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
@@ -24,12 +25,13 @@ type Server struct {
 
 	service *service.ShortenService
 	auditor audit.Publisher
+	logger  *zap.SugaredLogger
 }
 
 // NewServer creates a Server backed by svc. auditor may be nil to disable
 // auditing, matching handler.NewHandler.
-func NewServer(svc *service.ShortenService, auditor audit.Publisher) *Server {
-	return &Server{service: svc, auditor: auditor}
+func NewServer(svc *service.ShortenService, auditor audit.Publisher, logger *zap.Logger) *Server {
+	return &Server{service: svc, auditor: auditor, logger: logger.Sugar()}
 }
 
 // ShortenURL creates a short link for the given URL. A pre-existing link
@@ -41,7 +43,7 @@ func (s *Server) ShortenURL(ctx context.Context, in *shortenerpb.URLShortenReque
 
 	shortURL, err := s.service.CreateShortURL(ctx, in.GetUrl())
 	if err != nil && !errors.Is(err, storage.ErrDuplicateOriginalURL) {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, s.statusFromStorageErr(err)
 	}
 
 	s.notify(ctx, audit.ActionShorten, in.GetUrl())
@@ -52,11 +54,8 @@ func (s *Server) ShortenURL(ctx context.Context, in *shortenerpb.URLShortenReque
 // ExpandURL resolves a short identifier to its original URL.
 func (s *Server) ExpandURL(ctx context.Context, in *shortenerpb.URLExpandRequest) (*shortenerpb.URLExpandResponse, error) {
 	originalURL, err := s.service.GetOriginalURL(in.GetId())
-	if errors.Is(err, storage.ErrDeleted) {
-		return nil, status.Error(codes.NotFound, "link deleted")
-	}
 	if err != nil {
-		return nil, status.Error(codes.NotFound, "link not found")
+		return nil, s.statusFromStorageErr(err)
 	}
 
 	s.notify(ctx, audit.ActionFollow, originalURL)
@@ -67,11 +66,14 @@ func (s *Server) ExpandURL(ctx context.Context, in *shortenerpb.URLExpandRequest
 // ListUserURLs returns every link created by the caller, identified via
 // middleware.GRPCAuthInterceptor.
 func (s *Server) ListUserURLs(ctx context.Context, _ *emptypb.Empty) (*shortenerpb.UserURLsResponse, error) {
-	userID, _ := ctx.Value(contextkeys.UserIDContextKey).(string)
+	userID, ok := contextkeys.UserID(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "missing user")
+	}
 
 	urls, err := s.service.GetUrlsByUser(userID)
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, s.statusFromStorageErr(err)
 	}
 
 	resp := &shortenerpb.UserURLsResponse{Url: make([]*shortenerpb.URLData, 0, len(urls))}
@@ -85,13 +87,21 @@ func (s *Server) ListUserURLs(ctx context.Context, _ *emptypb.Empty) (*shortener
 	return resp, nil
 }
 
-// notify sends an audit event, if auditing is enabled — mirroring
-// handler.Handler.auditEvent.
+// notify sends an audit event, if auditing is enabled.
 func (s *Server) notify(ctx context.Context, action, url string) {
-	if s.auditor == nil {
-		return
-	}
+	audit.NotifyFromContext(ctx, s.auditor, action, url)
+}
 
-	userID, _ := ctx.Value(contextkeys.UserIDContextKey).(string)
-	s.auditor.Notify(audit.NewEvent(action, userID, url))
+// statusFromStorageErr maps err to a client-safe status: anything but a
+// known sentinel is logged and reported as a bare "internal error".
+func (s *Server) statusFromStorageErr(err error) error {
+	switch {
+	case errors.Is(err, storage.ErrDeleted):
+		return status.Error(codes.NotFound, "link deleted")
+	case errors.Is(err, storage.ErrNotFound):
+		return status.Error(codes.NotFound, "link not found")
+	default:
+		s.logger.Errorw("storage error", "error", err)
+		return status.Error(codes.Internal, "internal error")
+	}
 }

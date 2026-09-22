@@ -78,12 +78,7 @@ func NewHandler(s *service.ShortenService, db storage.Database, auditor audit.Pu
 // auditEvent sends an audit event to all registered observers, if auditing
 // is enabled (auditor != nil).
 func (h *Handler) auditEvent(ctx context.Context, action, url string) {
-	if h.auditor == nil {
-		return
-	}
-
-	userID, _ := ctx.Value(contextkeys.UserIDContextKey).(string)
-	h.auditor.Notify(audit.NewEvent(action, userID, url))
+	audit.NotifyFromContext(ctx, h.auditor, action, url)
 }
 
 // SetShortURL handles POST /. It accepts the original URL as plain text in
@@ -114,7 +109,7 @@ func (h *Handler) SetShortURL(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		h.logger.Errorln("CreateShortURL error", "error", err)
+		h.logger.Errorw("CreateShortURL error", "error", err)
 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -169,7 +164,7 @@ func (h *Handler) SetShortURLByJSON(w http.ResponseWriter, r *http.Request) {
 	if errors.Is(err, storage.ErrDuplicateOriginalURL) {
 		statusCode = http.StatusConflict
 	} else if err != nil {
-		h.logger.Errorln("CreateShortURL error", "error", err)
+		h.logger.Errorw("CreateShortURL error", "error", err)
 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -253,7 +248,12 @@ func (h *Handler) SetBatchURL(w http.ResponseWriter, r *http.Request) {
 // by the current user (identified via the authorization cookie). If there
 // are no links, it returns status 204.
 func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
-	userID := r.Context().Value(contextkeys.UserIDContextKey).(string)
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
+
 	userUrls, err := h.service.GetUrlsByUser(userID)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
@@ -282,7 +282,7 @@ func (h *Handler) GetUserURLS(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 	stats, err := h.service.GetStats(r.Context())
 	if err != nil {
-		h.logger.Errorln("GetStats error", "error", err)
+		h.logger.Errorw("GetStats error", "error", err)
 
 		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
@@ -304,9 +304,13 @@ func (h *Handler) GetStats(w http.ResponseWriter, r *http.Request) {
 // the corresponding links of the current user as deleted. It returns status
 // 202 without waiting for the deletion to actually happen.
 func (h *Handler) DeleteUserUrls(w http.ResponseWriter, r *http.Request) {
-	var ids []string
-	userID := r.Context().Value(contextkeys.UserIDContextKey).(string)
+	userID, ok := contextkeys.UserID(r.Context())
+	if !ok {
+		http.Error(w, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
+		return
+	}
 
+	var ids []string
 	err := json.NewDecoder(r.Body).Decode(&ids)
 	if err != nil {
 		http.Error(w, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)

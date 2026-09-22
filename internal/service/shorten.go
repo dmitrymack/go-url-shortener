@@ -177,7 +177,7 @@ func (s *ShortenService) StartDeleteWorker() {
 		defer s.wg.Done()
 		for task := range s.deleteQueue {
 			if err := s.storage.SetDeletedBatch(context.Background(), task.IDs, task.UserID); err != nil {
-				s.logger.Errorln("delete batch failed", "error", err)
+				s.logger.Errorw("delete batch failed", "error", err)
 			}
 		}
 	}()

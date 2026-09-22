@@ -5,10 +5,8 @@ import (
 	"net/http"
 )
 
-// TrustedSubnetHandler returns middleware that lets a request through only
-// if its X-Real-IP header holds an address inside subnet, and responds 403
-// otherwise (including for a missing or malformed header). A nil subnet
-// denies every request.
+// TrustedSubnetHandler only lets through requests whose X-Real-IP is
+// inside subnet (nil denies everyone) — client-spoofable, see README.
 func TrustedSubnetHandler(subnet *net.IPNet) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

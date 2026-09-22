@@ -27,7 +27,7 @@ func userContext(userID string) context.Context {
 func TestShortenURL_Success(t *testing.T) {
 	store := storage.NewStorage()
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	resp, err := s.ShortenURL(userContext("user1"), &shortenerpb.URLShortenRequest{Url: strPtr("https://example.com")})
 
@@ -43,7 +43,7 @@ func TestShortenURL_Success(t *testing.T) {
 func TestShortenURL_EmptyURL(t *testing.T) {
 	store := storage.NewStorage()
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	_, err := s.ShortenURL(userContext("user1"), &shortenerpb.URLShortenRequest{Url: strPtr("")})
 
@@ -57,7 +57,7 @@ func TestShortenURL_DuplicateOriginalURL(t *testing.T) {
 		},
 	}
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	resp, err := s.ShortenURL(userContext("user1"), &shortenerpb.URLShortenRequest{Url: strPtr("https://example.com")})
 
@@ -72,11 +72,12 @@ func TestShortenURL_StorageError(t *testing.T) {
 		},
 	}
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	_, err := s.ShortenURL(userContext("user1"), &shortenerpb.URLShortenRequest{Url: strPtr("https://example.com")})
 
 	assertCode(t, err, codes.Internal)
+	assertNoErrLeak(t, err, "storage unavailable")
 }
 
 func TestExpandURL_Success(t *testing.T) {
@@ -85,7 +86,7 @@ func TestExpandURL_Success(t *testing.T) {
 	_, err := store.Set(context.Background(), "abc123", "https://example.com", "user1")
 	require.NoError(t, err)
 
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 	resp, err := s.ExpandURL(context.Background(), &shortenerpb.URLExpandRequest{Id: strPtr("abc123")})
 
 	require.NoError(t, err)
@@ -95,7 +96,7 @@ func TestExpandURL_Success(t *testing.T) {
 func TestExpandURL_NotFound(t *testing.T) {
 	store := storage.NewStorage()
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	_, err := s.ExpandURL(context.Background(), &shortenerpb.URLExpandRequest{Id: strPtr("unknown")})
 
@@ -109,11 +110,26 @@ func TestExpandURL_Deleted(t *testing.T) {
 		},
 	}
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	_, err := s.ExpandURL(context.Background(), &shortenerpb.URLExpandRequest{Id: strPtr("abc123")})
 
 	assertCode(t, err, codes.NotFound)
+}
+
+func TestExpandURL_StorageError(t *testing.T) {
+	store := &mockURLStorage{
+		GetFn: func(key string) (string, error) {
+			return "", errors.New("connection reset by peer")
+		},
+	}
+	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
+	s := NewServer(svc, nil, zap.NewNop())
+
+	_, err := s.ExpandURL(context.Background(), &shortenerpb.URLExpandRequest{Id: strPtr("abc123")})
+
+	assertCode(t, err, codes.Internal, "a real storage failure must not look like a missing link (NotFound)")
+	assertNoErrLeak(t, err, "connection reset by peer")
 }
 
 func TestListUserURLs_Success(t *testing.T) {
@@ -126,7 +142,7 @@ func TestListUserURLs_Success(t *testing.T) {
 		},
 	}
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	resp, err := s.ListUserURLs(userContext("user1"), &emptypb.Empty{})
 
@@ -144,30 +160,41 @@ func TestListUserURLs_StorageError(t *testing.T) {
 		},
 	}
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	_, err := s.ListUserURLs(userContext("user1"), &emptypb.Empty{})
 
 	assertCode(t, err, codes.Internal)
+	assertNoErrLeak(t, err, "storage unavailable")
 }
 
 func TestNotify_NoAuditorIsNoop(t *testing.T) {
 	store := storage.NewStorage()
 	svc := shortenService.NewShortenService(store, testBaseURL, zap.NewNop())
-	s := NewServer(svc, nil)
+	s := NewServer(svc, nil, zap.NewNop())
 
 	assert.NotPanics(t, func() {
 		s.notify(context.Background(), "shorten", "https://example.com")
 	})
 }
 
-func assertCode(t *testing.T, err error, want codes.Code) {
+func assertCode(t *testing.T, err error, want codes.Code, msgAndArgs ...any) {
 	t.Helper()
 
 	require.Error(t, err)
 	st, ok := status.FromError(err)
 	require.True(t, ok, "expected a gRPC status error")
-	assert.Equal(t, want, st.Code())
+	assert.Equal(t, want, st.Code(), msgAndArgs...)
+}
+
+// assertNoErrLeak fails if the gRPC status message contains raw, an
+// internal detail that statusFromStorageErr must keep server-side.
+func assertNoErrLeak(t *testing.T, err error, raw string) {
+	t.Helper()
+
+	st, ok := status.FromError(err)
+	require.True(t, ok, "expected a gRPC status error")
+	assert.NotContains(t, st.Message(), raw)
 }
 
 // strPtr is a tiny local alias for *string, saving a "google.golang.org/protobuf/proto"

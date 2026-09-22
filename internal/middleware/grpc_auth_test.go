@@ -8,6 +8,7 @@ import (
 	"github.com/dmitrymack/go-url-shortener.git/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -43,7 +44,7 @@ func TestGRPCAuthInterceptor_NoToken_IssuesNewUser(t *testing.T) {
 		return "ok", nil
 	}
 
-	resp, err := GRPCAuthInterceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	resp, err := GRPCAuthInterceptor(zap.NewNop())(ctx, nil, &grpc.UnaryServerInfo{}, handler)
 
 	require.NoError(t, err)
 	assert.Equal(t, "ok", resp)
@@ -68,7 +69,7 @@ func TestGRPCAuthInterceptor_ValidToken_PassesUserID(t *testing.T) {
 		return "ok", nil
 	}
 
-	resp, err := GRPCAuthInterceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	resp, err := GRPCAuthInterceptor(zap.NewNop())(ctx, nil, &grpc.UnaryServerInfo{}, handler)
 
 	require.NoError(t, err)
 	assert.Equal(t, "ok", resp)
@@ -86,11 +87,33 @@ func TestGRPCAuthInterceptor_InvalidToken_Unauthenticated(t *testing.T) {
 		return nil, nil
 	}
 
-	_, err := GRPCAuthInterceptor(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+	_, err := GRPCAuthInterceptor(zap.NewNop())(ctx, nil, &grpc.UnaryServerInfo{}, handler)
 
 	require.Error(t, err)
 	st, ok := status.FromError(err)
 	require.True(t, ok)
 	assert.Equal(t, codes.Unauthenticated, st.Code())
 	assert.False(t, handlerCalled, "handler must not be called for an invalid token")
+}
+
+func TestGRPCAuthInterceptor_NoToken_SetHeaderFailureIsLoud(t *testing.T) {
+	t.Setenv("JWT_SECRET", "test-secret")
+
+	// No grpc.NewContextWithServerTransportStream: grpc.SetHeader has
+	// nowhere to deliver the header and must fail.
+	ctx := context.Background()
+
+	handlerCalled := false
+	handler := func(ctx context.Context, req any) (any, error) {
+		handlerCalled = true
+		return nil, nil
+	}
+
+	_, err := GRPCAuthInterceptor(zap.NewNop())(ctx, nil, &grpc.UnaryServerInfo{}, handler)
+
+	require.Error(t, err, "a token the client will never receive must not look like success")
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.Internal, st.Code())
+	assert.False(t, handlerCalled)
 }
